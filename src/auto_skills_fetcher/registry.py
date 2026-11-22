@@ -66,6 +66,15 @@ CREATE TABLE IF NOT EXISTS etag_cache (
     etag TEXT NOT NULL,
     checked_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS repo_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    repo TEXT NOT NULL,
+    stars INTEGER NOT NULL,
+    recorded_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_repo_snapshots_repo ON repo_snapshots(repo, recorded_at DESC);
 """
 
 
@@ -259,6 +268,55 @@ class SkillRegistry:
             (cache_key, etag, now),
         )
         self.conn.commit()
+
+    def list_blocked_skills(self, *, domain: str | None = None) -> list[SkillRecord]:
+        clauses = ["security_passed = 0"]
+        params: list[object] = []
+        if domain:
+            clauses.append("domain = ?")
+            params.append(domain)
+        sql = f"SELECT * FROM skills WHERE {' AND '.join(clauses)} ORDER BY updated_at DESC"
+        rows = self.conn.execute(sql, params).fetchall()
+        return [self._row_to_record(r) for r in rows]
+
+    def record_repo_snapshot(
+        self, repo: str, stars: int, *, created_days_ago: int | None = None
+    ) -> int:
+        """Record a repo star snapshot and return estimated 90-day star growth momentum."""
+        now_dt = datetime.now(timezone.utc)
+        now = now_dt.isoformat()
+
+        prev = self.conn.execute(
+            "SELECT stars, recorded_at FROM repo_snapshots WHERE repo = ? ORDER BY recorded_at ASC LIMIT 1",
+            (repo,),
+        ).fetchone()
+
+        self.conn.execute(
+            "INSERT INTO repo_snapshots (repo, stars, recorded_at) VALUES (?, ?, ?)",
+            (repo, int(stars), now),
+        )
+        self.conn.commit()
+
+        snapshot_growth = 0
+        if prev is not None:
+            try:
+                prev_dt = datetime.fromisoformat(str(prev["recorded_at"]))
+                elapsed_days = max(0.0, (now_dt - prev_dt).total_seconds() / 86400.0)
+                delta = max(0, int(stars) - int(prev["stars"]))
+                if elapsed_days >= 0.04 and delta > 0:  # >= ~1 hour
+                    snapshot_growth = int(delta * (90.0 / max(1.0, elapsed_days)))
+            except ValueError:
+                snapshot_growth = 0
+
+        age_growth = 0
+        if created_days_ago is not None and stars > 0:
+            age = max(1, int(created_days_ago))
+            if age <= 90:
+                age_growth = int(stars)
+            else:
+                age_growth = int(stars * (90.0 / age))
+
+        return max(snapshot_growth, age_growth)
 
     def stats(self) -> dict[str, int]:
         total = self.conn.execute("SELECT COUNT(*) FROM skills").fetchone()[0]

@@ -17,8 +17,28 @@ seed_repositories:
     url: https://github.com/O0000-code/awesome-academic-skills
     trust_tier: curated
     domains: [academic]
-  - repo: K-Dense-AI/scientific-agent-skills
-    url: https://github.com/k-dense-ai/scientific-agent-skills
+  - repo: K-Dense-AI/claude-scientific-skills
+    url: https://github.com/K-Dense-AI/claude-scientific-skills
+    trust_tier: community_verified
+    domains: [academic]
+  - repo: HKUSTDial/Supervisor-Skills
+    url: https://github.com/HKUSTDial/Supervisor-Skills
+    trust_tier: community_verified
+    domains: [academic]
+  - repo: Imbad0202/academic-research-skills
+    url: https://github.com/Imbad0202/academic-research-skills
+    trust_tier: community_verified
+    domains: [academic]
+  - repo: tsingyuai/scientify
+    url: https://github.com/tsingyuai/scientify
+    trust_tier: community_verified
+    domains: [academic]
+  - repo: wentorai/research-plugins
+    url: https://github.com/wentorai/research-plugins
+    trust_tier: curated
+    domains: [academic]
+  - repo: Orchestra-Research/AI-Research-SKILLs
+    url: https://github.com/Orchestra-Research/AI-Research-SKILLs
     trust_tier: community_verified
     domains: [academic]
   - repo: alirezarezvani/claude-skills
@@ -34,6 +54,11 @@ domain_queries:
       - '"BibTeX"'
       - '"PRISMA"'
       - '"arXiv"'
+      - '"experimental design"'
+      - '"plagiarism"'
+      - '"peer review"'
+      - '"reproducibility"'
+      - '"research progress"'
     topics:
       - academic-research
       - scientific-skills
@@ -94,6 +119,10 @@ trusted_orgs:
   - vercel-labs
   - supabase
   - K-Dense-AI
+  - HKUSTDial
+  - Imbad0202
+  - Orchestra-Research
+  - tsingyuai
   - ComposioHQ
   - VoltAgent
   - bytedance

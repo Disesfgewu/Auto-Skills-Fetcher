@@ -135,7 +135,11 @@ def _sync_preset_skills(
         has_refs = any(
             p.startswith("references/") or p.lower().endswith("reference.md") for p in extra_files
         )
-        sec = scan_skill_security(raw_md, extra_scripts=_extract_script_texts(extra_files))
+        sec = scan_skill_security(
+            raw_md,
+            extra_scripts=_extract_script_texts(extra_files),
+            raw_assets=extra_files,
+        )
         try:
             doc = parse_skill_md(raw_md, has_scripts=has_scripts, has_references=has_refs)
         except ValueError as exc:
@@ -144,6 +148,10 @@ def _sync_preset_skills(
             continue
 
         meta = active_crawler.fetch_repo_metadata(item["repo"])
+        stars = int(meta.get("stars", 0))
+        growth_90d = reg.record_repo_snapshot(
+            item["repo"], stars, created_days_ago=meta.get("created_days_ago")
+        )
         rec = SkillRecord(
             skill_id=skill_id,
             name=item["name"],
@@ -155,7 +163,8 @@ def _sync_preset_skills(
             commit_sha=sha or "upstream",
             content_hash=doc.content_hash,
             raw_content=raw_md,
-            stars=int(meta.get("stars", 0)),
+            stars=stars,
+            stars_90d_growth=growth_90d,
             curated_mentions=1,
             days_since_update=int(meta.get("days_since_update", 30)),
             license_spdx=str(meta.get("license_spdx", "")),
@@ -174,6 +183,9 @@ def _sync_preset_skills(
             f"  [{status_tag}] {item['name']} ({item['repo']}) — "
             f"{len(raw_md)}B SKILL.md + {len(extra_files)} assets, score={rec.score.total}"
         )
+        if not sec.passed:
+            for f in sec.findings:
+                print(f"    [SECURITY {f.severity.upper()} {f.rule_id}] {f.description} ({f.evidence})")
         synced += 1
 
     return synced, failed
@@ -263,6 +275,10 @@ def _cmd_crawl(args: argparse.Namespace) -> int:
                 if reg.has_content_hash(doc.content_hash):
                     continue
                 meta = crawler.fetch_repo_metadata(item["repo"])
+                stars = int(meta.get("stars", 0))
+                growth_90d = reg.record_repo_snapshot(
+                    item["repo"], stars, created_days_ago=meta.get("created_days_ago")
+                )
                 rec = SkillRecord(
                     skill_id=f"{item['repo']}:{item['path']}",
                     name=doc.name,
@@ -274,7 +290,8 @@ def _cmd_crawl(args: argparse.Namespace) -> int:
                     commit_sha=sha or item.get("sha", ""),
                     content_hash=doc.content_hash,
                     raw_content=raw,
-                    stars=int(meta.get("stars", 0)),
+                    stars=stars,
+                    stars_90d_growth=growth_90d,
                     days_since_update=int(meta.get("days_since_update", 30)),
                     license_spdx=str(meta.get("license_spdx", "")),
                     estimated_tokens=doc.estimated_tokens,
@@ -340,6 +357,27 @@ def _cmd_assemble(args: argparse.Namespace) -> int:
             sid = f"{item['repo']}:{item['path']}"
             rec = indexed.get(sid)
             if rec:
+                bdir = bundle_cache_dir(args.db, sid)
+                extra_scripts: dict[str, str] = {}
+                raw_assets: dict[str, bytes] = {}
+                if bdir.is_dir():
+                    for fpath in bdir.rglob("*"):
+                        if not fpath.is_file():
+                            continue
+                        rel = str(fpath.relative_to(bdir))
+                        raw_bytes = fpath.read_bytes()
+                        raw_assets[rel] = raw_bytes
+                    extra_scripts = _extract_script_texts(raw_assets)
+                sec = scan_skill_security(
+                    rec.raw_content, extra_scripts=extra_scripts, raw_assets=raw_assets
+                )
+                if not sec.passed:
+                    print(
+                        f"  [SECURITY BLOCKED] Refusing to assemble '{rec.name}' ({sid}): "
+                        f"{[f.rule_id for f in sec.findings]}",
+                        file=sys.stderr,
+                    )
+                    continue
                 if rec.commit_sha == "preset-seed":
                     stub_count += 1
                 payloads.append(
@@ -351,7 +389,7 @@ def _cmd_assemble(args: argparse.Namespace) -> int:
                         "path": rec.path,
                         "commit_sha": rec.commit_sha,
                         "raw_content": rec.raw_content,
-                        "bundle_dir": str(bundle_cache_dir(args.db, sid)),
+                        "bundle_dir": str(bdir),
                     }
                 )
 
@@ -755,6 +793,258 @@ def _cmd_check_updates(args: argparse.Namespace) -> int:
         reg.close()
 
 
+def _cmd_discover(args: argparse.Namespace) -> int:
+    sources_cfg = load_yaml_config(args.sources_config)
+    domain_queries = sources_cfg.get("domain_queries", {})
+    domains = list(domain_queries.keys()) if args.domain == "all" else [args.domain]
+    crawler = GitHubCrawler()
+    reg = SkillRegistry(args.db)
+    try:
+        for dom in domains:
+            if dom not in domain_queries:
+                print(f"Unknown domain '{dom}'.", file=sys.stderr)
+                return 2
+            dom_cfg = domain_queries[dom]
+            if args.dry_run:
+                qs = crawler.build_trending_repo_queries(
+                    dom, dom_cfg, days=args.days, min_stars=args.min_stars
+                )
+                print(f"[DRY-RUN] Trending discovery for domain '{dom}' ({len(qs)} queries):")
+                for q in qs:
+                    print(f"  - {q}")
+                continue
+
+            repos = crawler.search_trending_repos(
+                dom,
+                dom_cfg,
+                days=args.days,
+                min_stars=args.min_stars,
+                max_repos=args.max_repos,
+            )
+            print(
+                f"=== Trending Discovery [{dom}] (window={args.days}d, min_stars={args.min_stars}): "
+                f"found {len(repos)} breakout/surging repos ==="
+            )
+            ingested = 0
+            blocked_count = 0
+            for repo_info in repos:
+                repo = repo_info["repo"]
+                stars = repo_info["stars"]
+                vel = repo_info["velocity_per_day"]
+                age = repo_info["created_days_ago"]
+                growth_90d = reg.record_repo_snapshot(repo, stars, created_days_ago=age)
+                skill_paths = crawler.discover_skills_in_repo(
+                    repo,
+                    branch=repo_info["default_branch"],
+                    domain_keywords=dom_cfg.get("keywords", []),
+                    max_skills=args.max_skills_per_repo,
+                )
+                if not skill_paths:
+                    continue
+                print(
+                    f"  Repo {repo} (stars={stars}, age={age}d, velocity={vel}/day, "
+                    f"est_90d_growth={growth_90d}) -> {len(skill_paths)} SKILL.md candidate(s)"
+                )
+                for spath in skill_paths:
+                    try:
+                        raw_md, sha, extra_files = crawler.fetch_skill_bundle(
+                            repo, spath, ref=repo_info["default_branch"], max_files=20
+                        )
+                    except (urllib.error.HTTPError, urllib.error.URLError):
+                        continue
+                    if not raw_md:
+                        continue
+                    has_scripts = any(p.startswith("scripts/") for p in extra_files)
+                    has_refs = any(
+                        p.startswith("references/") or p.lower().endswith("reference.md")
+                        for p in extra_files
+                    )
+                    sec = scan_skill_security(
+                        raw_md,
+                        extra_scripts=_extract_script_texts(extra_files),
+                        raw_assets=extra_files,
+                    )
+                    try:
+                        doc = parse_skill_md(raw_md, has_scripts=has_scripts, has_references=has_refs)
+                    except ValueError:
+                        continue
+
+                    sid = f"{repo}:{spath}"
+                    rec = SkillRecord(
+                        skill_id=sid,
+                        name=doc.name,
+                        description=doc.description,
+                        domain=dom,
+                        repo=repo,
+                        path=spath,
+                        url=f"{repo_info['url']}/blob/{repo_info['default_branch']}/{spath}",
+                        commit_sha=sha or "trending",
+                        content_hash=doc.content_hash,
+                        raw_content=raw_md,
+                        stars=stars,
+                        stars_90d_growth=growth_90d,
+                        days_since_update=int(repo_info["days_since_update"]),
+                        license_spdx=str(repo_info["license_spdx"]),
+                        has_scripts=has_scripts,
+                        has_references=has_refs,
+                        estimated_tokens=doc.estimated_tokens,
+                        security_passed=sec.passed,
+                        is_champion=False,
+                    )
+                    rec.score = evaluate_skill(rec, doc, config=sources_cfg)
+                    reg.upsert_skill(rec)
+                    if sec.passed:
+                        save_skill_bundle(bundle_cache_dir(args.db, sid), extra_files)
+                        ingested += 1
+                        print(f"    [SAFE]    {doc.name} (score={rec.score.total}, assets={len(extra_files)})")
+                    else:
+                        blocked_count += 1
+                        rules = ", ".join(sorted({f.rule_id for f in sec.findings}))
+                        print(f"    [BLOCKED] {doc.name} — quarantined by security gate ({rules})")
+                        for f in sec.findings[:3]:
+                            print(f"              {f.severity.upper()} {f.rule_id}: {f.evidence}")
+
+            print(
+                f"Domain '{dom}' discovery complete: {ingested} safe candidate(s) indexed, "
+                f"{blocked_count} quarantined."
+            )
+            champions = reg.list_skills(domain=dom, champions_only=True)
+            candidates = reg.list_skills(domain=dom, candidates_only=True)
+            recs = recommend_replacements(champions, candidates, config=sources_cfg)
+            if recs:
+                reg.save_recommendations(recs)
+                print(f"  Breakout Recommendations ({len(recs)}):")
+                for r in recs[:10]:
+                    print(f"    [{r.kind.upper()}] {r.rationale}")
+            else:
+                print("  No new breakout challengers exceeded the replacement margin.")
+        return 0
+    finally:
+        reg.close()
+
+
+def _audit_directory(target_path: Path) -> list[dict]:
+    results: list[dict] = []
+    if not target_path.is_dir():
+        return results
+    for child in sorted(target_path.iterdir()):
+        if not child.is_dir() or child.name.startswith("."):
+            continue
+        skill_md = child / "SKILL.md"
+        if not skill_md.is_file():
+            continue
+        raw_md = skill_md.read_text(encoding="utf-8", errors="replace")
+        raw_assets: dict[str, bytes] = {}
+        for fpath in child.rglob("*"):
+            if not fpath.is_file() or fpath == skill_md:
+                continue
+            rel = str(fpath.relative_to(child))
+            try:
+                raw_assets[rel] = fpath.read_bytes()
+            except OSError:
+                continue
+        sec = scan_skill_security(
+            raw_md,
+            extra_scripts=_extract_script_texts(raw_assets),
+            raw_assets=raw_assets,
+        )
+        results.append(
+            {
+                "skill": child.name,
+                "path": str(child),
+                "passed": sec.passed,
+                "blocked": sec.blocked,
+                "findings": [f.__dict__ for f in sec.findings],
+            }
+        )
+    return results
+
+
+def _cmd_audit(args: argparse.Namespace) -> int:
+    report: dict = {"targets": [], "registry": []}
+    any_blocked = False
+
+    targets = _resolve_cli_targets(args, default_all_agents=(not args.registry))
+    for label, target_path in targets:
+        items = _audit_directory(target_path)
+        for it in items:
+            if it["blocked"]:
+                any_blocked = True
+        report["targets"].append({"agent": label, "path": str(target_path), "skills": items})
+
+    if args.registry:
+        reg = SkillRegistry(args.db)
+        try:
+            all_skills = reg.list_skills() + reg.list_blocked_skills()
+            for rec in all_skills:
+                bdir = bundle_cache_dir(args.db, rec.skill_id)
+                raw_assets: dict[str, bytes] = {}
+                if bdir.is_dir():
+                    for fpath in bdir.rglob("*"):
+                        if fpath.is_file():
+                            raw_assets[str(fpath.relative_to(bdir))] = fpath.read_bytes()
+                sec = scan_skill_security(
+                    rec.raw_content,
+                    extra_scripts=_extract_script_texts(raw_assets),
+                    raw_assets=raw_assets,
+                )
+                if sec.blocked:
+                    any_blocked = True
+                report["registry"].append(
+                    {
+                        "skill_id": rec.skill_id,
+                        "name": rec.name,
+                        "domain": rec.domain,
+                        "passed": sec.passed,
+                        "blocked": sec.blocked,
+                        "findings": [f.__dict__ for f in sec.findings],
+                    }
+                )
+        finally:
+            reg.close()
+
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return 1 if any_blocked else 0
+
+    for trep in report["targets"]:
+        skills = trep["skills"]
+        blocked_n = sum(1 for s in skills if s["blocked"])
+        warn_n = sum(1 for s in skills if not s["blocked"] and s["findings"])
+        print(
+            f"Security Audit [{trep['agent']}] -> {trep['path']} "
+            f"(scanned={len(skills)}, blocked={blocked_n}, warnings={warn_n})"
+        )
+        for s in skills:
+            if s["blocked"]:
+                print(f"  [BLOCKED] {s['skill']}")
+                for f in s["findings"]:
+                    print(f"    - {f['severity'].upper()} {f['rule_id']}: {f['description']} ({f['evidence']})")
+            elif s["findings"]:
+                print(f"  [WARN]    {s['skill']}")
+                for f in s["findings"]:
+                    print(f"    - {f['severity'].upper()} {f['rule_id']}: {f['description']} ({f['evidence']})")
+            else:
+                print(f"  [CLEAN]   {s['skill']}")
+
+    if args.registry:
+        reg_items = report["registry"]
+        blocked_n = sum(1 for s in reg_items if s["blocked"])
+        warn_n = sum(1 for s in reg_items if not s["blocked"] and s["findings"])
+        print(
+            f"\nRegistry Security Audit ({args.db}): "
+            f"scanned={len(reg_items)}, blocked={blocked_n}, warnings={warn_n}"
+        )
+        for s in reg_items:
+            if s["blocked"] or s["findings"]:
+                tag = "BLOCKED" if s["blocked"] else "WARN"
+                print(f"  [{tag}] {s['name']} ({s['skill_id']})")
+                for f in s["findings"]:
+                    print(f"    - {f['severity'].upper()} {f['rule_id']}: {f['description']} ({f['evidence']})")
+
+    return 1 if any_blocked else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="skillpack",
@@ -830,6 +1120,34 @@ def build_parser() -> argparse.ArgumentParser:
     p_crawl.add_argument("--limit", type=int, default=30, help="Max items per domain.")
     p_crawl.add_argument("--dry-run", action="store_true", help="Print partitioned queries without network calls.")
     p_crawl.set_defaults(func=_cmd_crawl)
+
+    p_disc = sub.add_parser(
+        "discover",
+        help="Dynamically discover newly exploding / trending GitHub skill repos and quarantine unsafe skills.",
+    )
+    p_disc.add_argument("--domain", default="all", help="Domain name or 'all'.")
+    p_disc.add_argument("--days", type=int, default=90, help="Rolling lookback window in days for breakout repos.")
+    p_disc.add_argument("--min-stars", type=int, default=25, help="Minimum GitHub stars threshold.")
+    p_disc.add_argument("--max-repos", type=int, default=10, help="Max trending repos to inspect per domain.")
+    p_disc.add_argument("--max-skills-per-repo", type=int, default=5, help="Max SKILL.md files to inspect per repo.")
+    p_disc.add_argument("--dry-run", action="store_true", help="Print trending search queries without network calls.")
+    p_disc.set_defaults(func=_cmd_discover)
+
+    p_audit = sub.add_parser(
+        "audit",
+        help="Deep security & prompt-injection audit over installed skills or the local registry.",
+    )
+    p_audit.add_argument("--target", help="Audit a custom skills directory.")
+    p_audit.add_argument(
+        "--agent",
+        choices=["agy", "claude", "codex", "all"],
+        help="Audit native directory for agy, claude, codex, or all.",
+    )
+    p_audit.add_argument("--scope", choices=["project", "global"], default="project")
+    p_audit.add_argument("--project-root", default=".")
+    p_audit.add_argument("--registry", action="store_true", help="Also audit all skills stored in SQLite registry.")
+    p_audit.add_argument("--json", action="store_true", help="Output JSON.")
+    p_audit.set_defaults(func=_cmd_audit)
 
     p_rec = sub.add_parser("recommend", help="Run Champion-Challenger replacement scoring.")
     p_rec.add_argument("--domain", default="all", help="Domain name or 'all'.")

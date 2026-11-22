@@ -9,7 +9,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 GITHUB_API_BASE = "https://api.github.com"
@@ -134,6 +134,15 @@ class GitHubCrawler:
             except ValueError:
                 days_since = 30
 
+        created_at = payload.get("created_at")
+        created_days_ago = 365
+        if isinstance(created_at, str):
+            try:
+                cdt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                created_days_ago = max(1, (datetime.now(timezone.utc) - cdt).days)
+            except ValueError:
+                created_days_ago = 365
+
         lic = payload.get("license") or {}
         spdx = str(lic.get("spdx_id") or "") if isinstance(lic, dict) else ""
         if spdx == "NOASSERTION":
@@ -142,8 +151,11 @@ class GitHubCrawler:
         meta = {
             "stars": int(payload.get("stargazers_count") or 0),
             "days_since_update": days_since,
+            "created_days_ago": created_days_ago,
             "license_spdx": spdx,
             "default_branch": str(payload.get("default_branch") or "main"),
+            "description": str(payload.get("description") or ""),
+            "topics": list(payload.get("topics") or []),
         }
         self._repo_cache[repo] = meta
         return meta
@@ -281,3 +293,158 @@ class GitHubCrawler:
                 if len(results) >= max_items:
                     break
         return results
+
+    def build_trending_repo_queries(
+        self,
+        domain: str,
+        domain_cfg: dict[str, Any],
+        *,
+        days: int = 90,
+        min_stars: int = 25,
+    ) -> list[str]:
+        """Build GitHub Repository Search queries to discover breakout & surging skill repos."""
+        now = datetime.now(timezone.utc)
+        created_cutoff = (now - timedelta(days=max(7, days))).strftime("%Y-%m-%d")
+        pushed_cutoff = (now - timedelta(days=min(30, max(7, days // 3)))).strftime("%Y-%m-%d")
+
+        topics = [str(t).strip() for t in domain_cfg.get("topics", []) if str(t).strip()]
+        raw_kws = [str(k).strip().strip('"') for k in domain_cfg.get("keywords", [])[:4] if str(k).strip()]
+        domain_hint = topics[0].replace("-", " ") if topics else (raw_kws[0] if raw_kws else domain)
+
+        queries = [
+            # Newly created viral/breakout agent skill repos in this domain
+            f'"SKILL.md" {domain_hint} created:>{created_cutoff} stars:>={min_stars}',
+            f'skills {domain_hint} created:>{created_cutoff} stars:>={min_stars}',
+            # Recently surging active skill repos across GitHub (not limited to seed list)
+            f'"agent skills" {domain_hint} pushed:>{pushed_cutoff} stars:>={max(min_stars, 50)}',
+            f'"claude skills" {domain_hint} pushed:>{pushed_cutoff} stars:>={max(min_stars, 50)}',
+        ]
+        return queries
+
+    def search_trending_repos(
+        self,
+        domain: str,
+        domain_cfg: dict[str, Any],
+        *,
+        days: int = 90,
+        min_stars: int = 25,
+        max_repos: int = 10,
+        dry_run: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Discover newly exploding or rapidly rising skill repositories across all of GitHub."""
+        queries = self.build_trending_repo_queries(
+            domain, domain_cfg, days=days, min_stars=min_stars
+        )
+        if dry_run:
+            return [{"domain": domain, "query": q} for q in queries]
+
+        now = datetime.now(timezone.utc)
+        by_repo: dict[str, dict[str, Any]] = {}
+        for q in queries:
+            url = (
+                f"{GITHUB_API_BASE}/search/repositories?"
+                f"q={urllib.parse.quote(q)}&sort=stars&order=desc&per_page={min(max_repos, 20)}"
+            )
+            try:
+                _, payload, _ = self._request_json(url)
+            except urllib.error.HTTPError:
+                continue
+            if not isinstance(payload, dict):
+                continue
+            for item in payload.get("items", []):
+                full_name = str(item.get("full_name") or "")
+                if not full_name or full_name in by_repo:
+                    continue
+                stars = int(item.get("stargazers_count") or 0)
+                created_days = 365
+                created_at = item.get("created_at")
+                if isinstance(created_at, str):
+                    try:
+                        cdt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                        created_days = max(1, (now - cdt).days)
+                    except ValueError:
+                        created_days = 365
+
+                pushed_days = 30
+                pushed_at = item.get("pushed_at")
+                if isinstance(pushed_at, str):
+                    try:
+                        pdt = datetime.fromisoformat(pushed_at.replace("Z", "+00:00"))
+                        pushed_days = max(0, (now - pdt).days)
+                    except ValueError:
+                        pushed_days = 30
+
+                lic = item.get("license") or {}
+                spdx = str(lic.get("spdx_id") or "") if isinstance(lic, dict) else ""
+                if spdx == "NOASSERTION":
+                    spdx = ""
+
+                velocity = round(stars / max(1, created_days), 2)
+                entry = {
+                    "repo": full_name,
+                    "url": str(item.get("html_url") or f"https://github.com/{full_name}"),
+                    "description": str(item.get("description") or ""),
+                    "stars": stars,
+                    "created_days_ago": created_days,
+                    "days_since_update": pushed_days,
+                    "velocity_per_day": velocity,
+                    "license_spdx": spdx,
+                    "default_branch": str(item.get("default_branch") or "main"),
+                    "topics": list(item.get("topics") or []),
+                }
+                by_repo[full_name] = entry
+                self._repo_cache[full_name] = {
+                    "stars": stars,
+                    "days_since_update": pushed_days,
+                    "created_days_ago": created_days,
+                    "license_spdx": spdx,
+                    "default_branch": entry["default_branch"],
+                    "description": entry["description"],
+                    "topics": entry["topics"],
+                }
+
+        ranked = sorted(
+            by_repo.values(),
+            key=lambda r: (r["velocity_per_day"], r["stars"]),
+            reverse=True,
+        )
+        return ranked[:max_repos]
+
+    def discover_skills_in_repo(
+        self,
+        repo: str,
+        *,
+        branch: str | None = None,
+        domain_keywords: list[str] | None = None,
+        max_skills: int = 5,
+    ) -> list[str]:
+        """Find SKILL.md paths inside a repository, prioritizing paths relevant to domain keywords."""
+        meta = self.fetch_repo_metadata(repo)
+        br = branch or meta.get("default_branch", "main")
+        tree = self._get_repo_tree(repo, br)
+        paths = [
+            str(e.get("path"))
+            for e in tree
+            if e.get("type") == "blob" and str(e.get("path") or "").endswith("SKILL.md")
+        ]
+        if not paths:
+            return []
+
+        if domain_keywords:
+            norm_kws = [
+                k.strip().strip('"').lower().replace(" ", "-")
+                for k in domain_keywords
+                if k.strip()
+            ]
+            norm_words = [
+                w for k in domain_keywords for w in k.strip().strip('"').lower().split() if len(w) > 2
+            ]
+
+            def _relevance(p: str) -> tuple[int, int]:
+                pl = p.lower()
+                score = sum(3 for kw in norm_kws if kw in pl) + sum(1 for w in norm_words if w in pl)
+                return (score, -len(p))
+
+            paths.sort(key=_relevance, reverse=True)
+
+        return paths[:max_skills]

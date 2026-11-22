@@ -14,7 +14,7 @@ Automated discovery, security auditing, 5-dimension scoring, Champion–Challeng
 
 ## Preset Skill Packs (`config/packs.yaml`)
 
-- **`academic-research`** (`pinned`, $\Delta \ge 12$): Literature review, citation/BibTeX verification, research lookup, academic paper drafting + `base-office`.
+- **`academic-research`** (`pinned`, $\Delta \ge 12$, 21 skills): Full research lifecycle — progress & workflow tracking (`vibe-research-workflow`, `idea-evaluator`, `hypothesis-generation`), paper crawling & literature review (`paper-download`, `paper-lookup`, `literature-review`, `citation-management`), experiments & testing (`experimental-design`, `baseline-runner`, `ml-experiment-tracker`, `statistical-analysis`, `scientific-visualization`), academic ethics & peer review (`plagiarism-detection-guide`, `web-scraping-ethics-guide`, `scientific-critical-thinking`, `peer-review`, `rebuttal-guidance`), and paper drafting (`academic-paper`) + `base-office`.
 - **`project-mgmt`** (`track-with-diff`, $\Delta \ge 8$): Roadmap planning, sprint operations, multi-audience roadmap communication, YAML sprint status tracker + `base-office`.
 - **`exec-secretary-deck`** (`side-by-side`, $\Delta \ge 6$): PowerPoint generation, theme styling, internal communications, meeting notes + `base-office`.
 
@@ -34,6 +34,12 @@ skillpack status
 # Inspect skills inside a pack (or what is currently installed in a project/global dir)
 skillpack show --pack academic-research
 skillpack show --agent all --scope project --project-root .
+
+# Discover newly exploding / trending skill repos across all of GitHub (not limited to fixed seed repos)
+skillpack discover --domain academic --days 90 --min-stars 30
+
+# Deep security & prompt-injection audit over installed skills and local registry
+skillpack audit --agent all --scope project --registry
 
 # Crawl GitHub for additional domain candidates
 skillpack crawl --domain academic --dry-run

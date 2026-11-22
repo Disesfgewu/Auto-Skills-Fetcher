@@ -24,28 +24,103 @@ packs:
         url: https://github.com/anthropics/skills
 
   academic-research:
-    description: 學術研究助手：涵蓋系統性文獻回顧、引文驗證與 BibTeX 管理、檢索軌跡與論文起草。
+    description: 全流程學術研究助手：涵蓋研究規劃與進度追蹤、論文爬取與文獻回顧、實驗設計與基準測試、統計分析與視覺化、學術倫理與抄襲檢查、同儕審查與論文撰寫。
     domain: academic
     extends:
       - base-office
     update_policy: pinned
     hysteresis_margin: 12.0
     skills:
+      # 1. 研究規劃、題目評估與進度追蹤
+      - slot: academic:research-progress
+        name: vibe-research-workflow
+        repo: HKUSTDial/Supervisor-Skills
+        path: skills/vibe-research-workflow/SKILL.md
+        url: https://github.com/HKUSTDial/Supervisor-Skills/blob/main/skills/vibe-research-workflow/SKILL.md
+      - slot: academic:idea-evaluation
+        name: idea-evaluator
+        repo: HKUSTDial/Supervisor-Skills
+        path: skills/idea-evaluator/SKILL.md
+        url: https://github.com/HKUSTDial/Supervisor-Skills/blob/main/skills/idea-evaluator/SKILL.md
+      - slot: academic:hypothesis-generation
+        name: hypothesis-generation
+        repo: K-Dense-AI/claude-scientific-skills
+        path: skills/hypothesis-generation/SKILL.md
+        url: https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/skills/hypothesis-generation/SKILL.md
+      # 2. 學術論文爬取、檢索、文獻回顧與引文管理
+      - slot: academic:paper-crawler
+        name: paper-download
+        repo: tsingyuai/scientify
+        path: skills/paper-download/SKILL.md
+        url: https://github.com/tsingyuai/scientify/blob/main/skills/paper-download/SKILL.md
+      - slot: academic:paper-lookup
+        name: paper-lookup
+        repo: K-Dense-AI/claude-scientific-skills
+        path: skills/paper-lookup/SKILL.md
+        url: https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/skills/paper-lookup/SKILL.md
       - slot: academic:literature-review
         name: literature-review
-        repo: K-Dense-AI/scientific-agent-skills
+        repo: K-Dense-AI/claude-scientific-skills
         path: skills/literature-review/SKILL.md
-        url: https://github.com/k-dense-ai/scientific-agent-skills/blob/main/skills/literature-review/SKILL.md
+        url: https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/skills/literature-review/SKILL.md
       - slot: academic:citation-management
         name: citation-management
         repo: K-Dense-AI/claude-scientific-skills
         path: skills/citation-management/SKILL.md
         url: https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/skills/citation-management/SKILL.md
-      - slot: academic:research-lookup
-        name: research-lookup
-        repo: K-Dense-AI/scientific-agent-skills
-        path: skills/research-lookup/SKILL.md
-        url: https://github.com/k-dense-ai/scientific-agent-skills/blob/main/skills/research-lookup/SKILL.md
+      # 3. 實驗設計、跑基準測試、實驗追蹤與統計視覺化
+      - slot: academic:experimental-design
+        name: experimental-design
+        repo: K-Dense-AI/claude-scientific-skills
+        path: skills/experimental-design/SKILL.md
+        url: https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/skills/experimental-design/SKILL.md
+      - slot: academic:baseline-runner
+        name: baseline-runner
+        repo: tsingyuai/scientify
+        path: skills/baseline-runner/SKILL.md
+        url: https://github.com/tsingyuai/scientify/blob/main/skills/baseline-runner/SKILL.md
+      - slot: academic:experiment-tracker
+        name: ml-experiment-tracker
+        repo: wentorai/research-plugins
+        path: skills/analysis/statistics/ml-experiment-tracker/SKILL.md
+        url: https://github.com/wentorai/research-plugins/blob/main/skills/analysis/statistics/ml-experiment-tracker/SKILL.md
+      - slot: academic:statistical-analysis
+        name: statistical-analysis
+        repo: K-Dense-AI/claude-scientific-skills
+        path: skills/statistical-analysis/SKILL.md
+        url: https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/skills/statistical-analysis/SKILL.md
+      - slot: academic:scientific-visualization
+        name: scientific-visualization
+        repo: K-Dense-AI/claude-scientific-skills
+        path: skills/scientific-visualization/SKILL.md
+        url: https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/skills/scientific-visualization/SKILL.md
+      # 4. 學術倫理、原創性/抄襲檢查、可重現性審查與同儕審稿
+      - slot: academic:academic-ethics
+        name: plagiarism-detection-guide
+        repo: wentorai/research-plugins
+        path: skills/writing/polish/plagiarism-detection-guide/SKILL.md
+        url: https://github.com/wentorai/research-plugins/blob/main/skills/writing/polish/plagiarism-detection-guide/SKILL.md
+      - slot: academic:scraping-ethics
+        name: web-scraping-ethics-guide
+        repo: wentorai/research-plugins
+        path: skills/tools/scraping/web-scraping-ethics-guide/SKILL.md
+        url: https://github.com/wentorai/research-plugins/blob/main/skills/tools/scraping/web-scraping-ethics-guide/SKILL.md
+      - slot: academic:scientific-integrity
+        name: scientific-critical-thinking
+        repo: K-Dense-AI/claude-scientific-skills
+        path: skills/scientific-critical-thinking/SKILL.md
+        url: https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/skills/scientific-critical-thinking/SKILL.md
+      - slot: academic:peer-review
+        name: peer-review
+        repo: K-Dense-AI/claude-scientific-skills
+        path: skills/peer-review/SKILL.md
+        url: https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/skills/peer-review/SKILL.md
+      - slot: academic:rebuttal-guidance
+        name: rebuttal-guidance
+        repo: HKUSTDial/Supervisor-Skills
+        path: others/rebuttal-guidance/SKILL.md
+        url: https://github.com/HKUSTDial/Supervisor-Skills/blob/main/others/rebuttal-guidance/SKILL.md
+      # 5. 論文撰寫
       - slot: academic:academic-paper
         name: academic-paper
         repo: Imbad0202/academic-research-skills
