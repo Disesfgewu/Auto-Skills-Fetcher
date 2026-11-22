@@ -105,7 +105,10 @@ def _sync_preset_skills(
                 extra_files: dict[str, bytes] = {}
                 for sibling in local_file.parent.rglob("*"):
                     if sibling.is_file() and sibling != local_file:
-                        extra_files[str(sibling.relative_to(local_file.parent))] = sibling.read_bytes()
+                        rel = sibling.relative_to(local_file.parent)
+                        if "__pycache__" in rel.parts or sibling.suffix in {".pyc", ".pyo"}:
+                            continue
+                        extra_files[str(rel)] = sibling.read_bytes()
                 has_scripts = any(p.startswith("scripts/") for p in extra_files)
                 has_refs = any(
                     p.startswith("references/") or p.lower().endswith("reference.md")
@@ -1268,6 +1271,28 @@ def _cmd_expand(args: argparse.Namespace) -> int:
         reg.close()
 
 
+def _cmd_dashboard(args: argparse.Namespace) -> int:
+    import importlib.util
+
+    packs_cfg_path = Path(args.packs_config).resolve()
+    repo_root = packs_cfg_path.parents[1] if packs_cfg_path.exists() else Path.cwd()
+    script_path = repo_root / "skills" / "project-command-center" / "scripts" / "serve_dashboard.py"
+    if not script_path.is_file():
+        print(f"Dashboard script not found at {script_path}", file=sys.stderr)
+        return 1
+
+    spec = importlib.util.spec_from_file_location("serve_dashboard", script_path)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    argv = ["--hub", args.hub, "--host", args.host, "--port", str(args.port)]
+    if args.open:
+        argv.append("--open")
+    if args.init_sample:
+        argv.append("--init-sample")
+    return int(mod.main(argv))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="skillpack",
@@ -1397,6 +1422,21 @@ def build_parser() -> argparse.ArgumentParser:
     p_exp.add_argument("--project-root", default=".")
     p_exp.add_argument("--json", action="store_true", help="Output JSON.")
     p_exp.set_defaults(func=_cmd_expand)
+
+    p_dash = sub.add_parser(
+        "dashboard",
+        help="Launch the live visual PM & workforce allocation web dashboard.",
+    )
+    p_dash.add_argument("--hub", default="./project-hub", help="Path to project-hub directory.")
+    p_dash.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1).")
+    p_dash.add_argument("--port", type=int, default=8765, help="Bind port (default: 8765).")
+    p_dash.add_argument("--open", action="store_true", help="Open browser automatically on startup.")
+    p_dash.add_argument(
+        "--init-sample",
+        action="store_true",
+        help="Initialize starter project-hub/ files if missing.",
+    )
+    p_dash.set_defaults(func=_cmd_dashboard)
 
     p_rec = sub.add_parser("recommend", help="Run Champion-Challenger replacement scoring.")
     p_rec.add_argument("--domain", default="all", help="Domain name or 'all'.")

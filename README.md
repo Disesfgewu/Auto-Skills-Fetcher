@@ -70,6 +70,9 @@ skillpack update --target ./.agents/skills --skill sprint-operations --incoming 
 
 # Roll back a skill to its previous backup
 skillpack rollback --target ./.agents/skills --skill sprint-operations
+
+# Launch the live visual PM & workforce allocation frontend dashboard
+skillpack dashboard --hub ./project-hub --port 8765 --init-sample --open
 ```
 
 ## Multi-Agent Target Paths (`--agent`)

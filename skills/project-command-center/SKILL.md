@@ -31,6 +31,17 @@ Maintain these canonical files inside `<project_root>/project-hub/` (see [projec
 
 ## Workflow
 
+### Step 0: Launch Live Visual PM & Workforce Dashboard (啟動視覺化前端)
+Whenever starting a PM review—especially when allocating tasks, balancing team workforce/capacity, or reviewing schedule & quality status—**start the bundled live visual frontend** so the user can read workload bars, task-to-objective progress, Gantt timelines, QA checklists, and Mermaid architecture diagrams directly in their browser while you work:
+
+```bash
+python3 ./scripts/serve_dashboard.py --hub ./project-hub --port 8765 --open
+# (Or via CLI: skillpack dashboard --hub ./project-hub --port 8765 --open)
+```
+
+- Run the server in the background (daemon mode) and share the `http://127.0.0.1:8765` link with the user.
+- The dashboard auto-syncs every 3 seconds as you update `project-hub/*.yaml`, and also lets the user interactively reassign task owners or update statuses directly in the UI.
+
 ### Step 1: Initialize or Load `project-hub/`
 - Check whether `project-hub/` exists in the workspace.
 - If missing, initialize `CHARTER.md`, `ARCHITECTURE.md`, `objectives.yaml`, `tasks.yaml`, and `team.yaml` from existing project docs/codebase and the schema in [project-hub-schema.yaml](./references/project-hub-schema.yaml).
