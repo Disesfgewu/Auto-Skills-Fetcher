@@ -84,6 +84,10 @@ Always produce a structured report containing:
 - **Quality Gate Audit**: Passed vs failed deliverables and required QA fixes before sign-off.
 
 ## Guardrails
+- **STRICT NO-PUSH / NO-WRITE TO GITHUB UNTIL APPROVAL (嚴禁未經核准推送任何東西)**：
+  - You MAY read GitHub Issues, PRs, Milestones, and CI status (read-only via `skillpack github-sync` or `project-hub/github_snapshot.yaml`).
+  - You MUST **NEVER** run `git push`, `gh issue create/edit/close`, `gh pr create/merge/comment`, or any mutating GitHub API request on your own.
+  - Whenever you want to propose creating/updating/commenting a GitHub Issue or pushing changes, **ONLY write a draft entry into `project-hub/pending_github_actions.yaml` with `status: awaiting_approval`**, and wait for the user to explicitly approve it!
 - **Never mark a task complete without quality evidence**: Always verify tests, build output, or review artifacts before changing `qa_status` to `passed`.
 - **Never silently change project scope or deadlines**: Propose explicit trade-off options (Scope vs Schedule vs Workforce) and ask the PM/user to confirm before altering `CHARTER.md` or milestone dates.
 - **Keep `ARCHITECTURE.md` synchronized**: Whenever a major component or interface changes, update the Mermaid diagram in `ARCHITECTURE.md` in the same review cycle.

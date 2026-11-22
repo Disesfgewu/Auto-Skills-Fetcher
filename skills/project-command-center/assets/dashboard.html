@@ -215,13 +215,14 @@
           { id: 't1', label: '👥 人力分配與負荷' },
           { id: 't2', label: '🎯 目標↔任務與時間軸' },
           { id: 't3', label: '✅ 品質硬閘門與風險' },
-          { id: 't4', label: '🗺️ 架構圖與計劃書' }
+          { id: 't4', label: '🗺️ 架構圖與計劃書' },
+          { id: 't5', label: '🐙 GitHub 連動與審批' }
         ],
         chips: [
           { label: '🔍 健檢進度與方向', prompt: '請根據 project-hub/ 健檢目前專案方向、時間進度、架構圖與計劃書，列出紅黃綠燈風險與處置建議。' },
           { label: '⚖️ 平衡人力負荷', prompt: '請分析每位成員的工作負荷與每週產能，找出超載或閒置人力並提出具體改派方案；必要時直接調整 tasks.yaml。' },
           { label: '✅ 審查產出品質', prompt: '請執行產出品質硬閘門審查，檢查所有任務的 acceptance_criteria、qa_status 與 evidence 是否達標。' },
-          { label: '🗺️ 核對架構與目標', prompt: '請核對 ARCHITECTURE.md 架構模組與 objectives.yaml 目標，確認是否有遺漏任務或架構偏移。' }
+          { label: '🐙 唯讀分析 GitHub Issues/PR', prompt: '請根據 github_snapshot.yaml（嚴禁自行推送或修改 GitHub）比對 Open Issues / PRs 與 tasks.yaml，指出未納入追蹤的項目；若有建議操作請只寫入 pending_github_actions.yaml 等我核准。' }
         ]
       },
       'academic-research': {
@@ -345,6 +346,44 @@
         body: JSON.stringify({ kind, id, ...patch })
       });
       if (res.ok) await refreshState(true);
+    }
+
+    async function syncGitHubReadonly() {
+      const repoInput = document.getElementById('gh-repo-input');
+      const repo = repoInput ? repoInput.value.trim() : '';
+      const btn = document.getElementById('gh-sync-btn');
+      if (btn) { btn.disabled = true; btn.textContent = '唯讀同步中...'; }
+      try {
+        const res = await fetch('/api/github/sync', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ repo })
+        });
+        const data = await res.json();
+        if (!data.ok) alert('GitHub 唯讀同步失敗: ' + (data.error || 'unknown'));
+        await refreshState(true);
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '🔄 唯讀同步 GitHub'; }
+      }
+    }
+
+    async function approveGitHubProposal(pid, title) {
+      if (!confirm(`確認核准並執行 GitHub 操作 [${pid}]：${title}？\n（註：git push 永遠不會自動執行）`)) return;
+      const res = await fetch('/api/github/approve', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proposal_id: pid, explicit_approval: true })
+      });
+      const data = await res.json();
+      if (!data.ok) alert('執行失敗: ' + (data.error || 'unknown'));
+      else if (data.message) alert(data.message);
+      await refreshState(true);
+    }
+
+    async function rejectGitHubProposal(pid) {
+      await fetch('/api/github/reject', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proposal_id: pid })
+      });
+      await refreshState(true);
     }
 
     async function refreshState(force = false) {
@@ -520,6 +559,56 @@
         </tbody></table></div></div>`;
 
       renderMermaidDocPanel(STATE.architecture_md || '', STATE.charter_md || '', '🗺️ 完整架構圖（ARCHITECTURE.md）', '📑 專案計劃書（CHARTER.md）', force);
+
+      const gh = STATE.github || {};
+      const ghIssues = gh.issues || [];
+      const ghPrs = gh.pull_requests || [];
+      const ghMs = gh.milestones || [];
+      const ghCi = gh.ci_runs || [];
+      const ghProps = gh.pending_proposals || [];
+      const t5 = document.getElementById('panel-t5');
+      if (t5) {
+        t5.innerHTML = `
+          <div class="alert alert-amber">🔒 <strong>STRICT NO-PUSH POLICY（嚴禁未經核准推送）</strong>：GitHub 同步僅限 <code>GET</code> 唯讀；AI 助手絕不可自行 <code>git push</code> 或修改遠端 Issue/PR，所有寫入建議皆須經下方審批佇列由你明確按「核准」才執行。</div>
+          <div class="card">
+            <h2>
+              <span>🐙 連結 GitHub Repository</span>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input id="gh-repo-input" value="${esc(gh.repo || '')}" placeholder="owner/repo" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;width:230px;" />
+                <button id="gh-sync-btn" class="tab-btn" onclick="syncGitHubReadonly()">🔄 唯讀同步 GitHub</button>
+              </div>
+            </h2>
+            <div style="font-size:11px;color:var(--muted);">上次唯讀同步：${esc(gh.synced_at || '尚未同步')} · Open Issues: ${ghIssues.filter(i => i.state === 'open').length} · Open PRs: ${ghPrs.filter(p => p.state === 'open').length} · Milestones: ${ghMs.length}</div>
+          </div>
+          <div class="card">
+            <h2>🛡️ 待核准 GitHub 寫入提案佇列（${ghProps.filter(p => p.status === 'awaiting_approval').length} 筆待審批）</h2>
+            ${ghProps.length ? `<table><thead><tr><th>ID</th><th>操作類型</th><th>提案標題與說明</th><th>狀態</th><th>審批</th></tr></thead><tbody>
+              ${ghProps.map(p => `<tr>
+                <td><strong>${esc(p.id)}</strong></td>
+                <td><span class="tag">${esc(p.action_type)}</span></td>
+                <td><strong>${esc(p.title)}</strong><div style="font-size:11px;color:var(--muted)">${esc(p.rationale || '')}</div></td>
+                <td><span class="tag st-${esc(p.status)}">${esc(p.status)}</span>${p.result_url ? ` <a href="${esc(p.result_url)}" target="_blank" style="color:var(--accent)">查看</a>` : ''}</td>
+                <td>${p.status === 'awaiting_approval' ? `<button class="tab-btn" style="color:#4ade80;border-color:#22c55e;padding:3px 7px;" onclick="approveGitHubProposal('${esc(p.id)}','${esc(p.title)}')">✅ 核准</button> <button class="tab-btn" style="color:#f87171;border-color:#ef4444;padding:3px 7px;" onclick="rejectGitHubProposal('${esc(p.id)}')">❌ 拒絕</button>` : '-'}</td>
+              </tr>`).join('')}
+            </tbody></table>` : '<div style="font-size:12px;color:var(--muted);">目前無待核准之 GitHub 寫入提案。</div>'}
+          </div>
+          <div class="grid-2">
+            <div class="card">
+              <h2>📌 GitHub Issues（唯讀）</h2>
+              ${ghIssues.length ? `<table><thead><tr><th>#</th><th>標題</th><th>指派</th><th>狀態</th></tr></thead><tbody>
+                ${ghIssues.slice(0, 15).map(i => `<tr><td><a href="${esc(i.url)}" target="_blank" style="color:var(--accent)">#${esc(i.number)}</a></td><td>${esc(i.title)}</td><td>${(i.assignees || []).join(', ') || '-'}</td><td><span class="tag st-${i.state === 'open' ? 'in_progress' : 'done'}">${esc(i.state)}</span></td></tr>`).join('')}
+              </tbody></table>` : '<div style="font-size:12px;color:var(--muted);">尚無同步到的 Issues（點上方「唯讀同步 GitHub」抓取）</div>'}
+            </div>
+            <div class="card">
+              <h2>🔀 Pull Requests & CI（唯讀）</h2>
+              ${ghPrs.length ? `<table><thead><tr><th>PR</th><th>標題</th><th>分支</th><th>狀態</th></tr></thead><tbody>
+                ${ghPrs.slice(0, 10).map(p => `<tr><td><a href="${esc(p.url)}" target="_blank" style="color:var(--accent)">#${esc(p.number)}</a></td><td>${esc(p.title)}</td><td><code>${esc(p.head_branch)}</code></td><td><span class="tag st-${p.state === 'merged' ? 'done' : 'in_progress'}">${esc(p.state)}</span></td></tr>`).join('')}
+              </tbody></table>` : '<div style="font-size:12px;color:var(--muted);">尚無同步到的 Pull Requests</div>'}
+              ${ghCi.length ? `<div style="margin-top:10px;"><strong style="font-size:12px;">最近 CI 執行：</strong>${ghCi.slice(0, 5).map(r => `<div style="font-size:11px;margin-top:3px;"><span class="tag st-${r.conclusion === 'success' ? 'passed' : 'warning'}">${esc(r.conclusion)}</span> ${esc(r.name)} (${esc(r.branch)})</div>`).join('')}</div>` : ''}
+            </div>
+          </div>
+        `;
+      }
     }
 
     /* ==================== 2. ACADEMIC-RESEARCH VIEW ==================== */

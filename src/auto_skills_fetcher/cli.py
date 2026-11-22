@@ -1394,6 +1394,21 @@ def _cmd_launch(args: argparse.Namespace) -> int:
     return _cmd_dashboard(dash_ns)
 
 
+def _cmd_github_sync(args: argparse.Namespace) -> int:
+    from .github_pm import sync_github_readonly
+
+    project_root = Path(args.project_root).expanduser().resolve()
+    hub_dir = Path(args.hub) if args.hub else (project_root / "project-hub")
+    snap = sync_github_readonly(hub_dir, repo=args.repo, project_root=project_root)
+    print(f"[READ-ONLY] Synced GitHub repo '{snap['repo']}' -> {hub_dir / 'github_snapshot.yaml'}")
+    print(
+        f"  Milestones: {len(snap['milestones'])}, Issues: {len(snap['issues'])}, "
+        f"PRs: {len(snap['pull_requests'])}, CI runs: {len(snap['ci_runs'])}"
+    )
+    print("  Policy: STRICT NO PUSH UNTIL APPROVAL (no remote writes performed).")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="skillpack",
@@ -1579,6 +1594,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_launch.add_argument("--prune", action="store_true", help="Remove previously managed skills when switching pack.")
     p_launch.add_argument("--init-sample", action="store_true", help="Initialize starter project-hub/ if missing.")
     p_launch.set_defaults(func=_cmd_launch)
+
+    p_gh = sub.add_parser(
+        "github-sync",
+        help="Read-only sync of GitHub Issues, PRs, Milestones, and CI status into project-hub/ (never pushes).",
+    )
+    p_gh.add_argument("--repo", help="GitHub repo 'owner/name' (auto-detected from git origin if omitted).")
+    p_gh.add_argument("--project-root", default=".", help="Project workspace root.")
+    p_gh.add_argument("--hub", help="Path to project-hub directory (default: <project-root>/project-hub).")
+    p_gh.set_defaults(func=_cmd_github_sync)
 
     p_rec = sub.add_parser("recommend", help="Run Champion-Challenger replacement scoring.")
     p_rec.add_argument("--domain", default="all", help="Domain name or 'all'.")

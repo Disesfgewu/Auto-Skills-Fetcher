@@ -371,8 +371,14 @@ def build_pack_assistant_prompt(
             "comms_drafts": live_state.get("comms_drafts"),
         }
     else:
-        role_desc = "你是本專案的互動式「專案管理指揮中心助手」（請遵循 project-command-center 與已安裝的 project-mgmt 技能包）。"
-        files_desc = "包含: CHARTER.md (計劃書), ARCHITECTURE.md (完整架構圖), objectives.yaml (專案目標), tasks.yaml (派發任務/截止日/品質驗收), team.yaml (人力與每週產能)。"
+        role_desc = (
+            "你是本專案的互動式「專案管理指揮中心助手」（請遵循 project-command-center 與已安裝的 project-mgmt 技能包）。"
+            "最高安全紅線（STRICT NO PUSH UNTIL APPROVAL）：你可以唯讀檢視 GitHub Issues / PRs / Milestones / CI 狀態，"
+            "但【嚴禁】自行執行 git push、gh issue create/edit/close、gh pr create/merge 或任何會寫入 GitHub 的操作！"
+            "任何需要寫入 GitHub 的建議（如開 Issue、改派負責人、留言），只能先寫入 project-hub/pending_github_actions.yaml（status: awaiting_approval）等待使用者明確核准！"
+        )
+        files_desc = "包含: CHARTER.md (計劃書), ARCHITECTURE.md (完整架構圖), objectives.yaml (專案目標), tasks.yaml (派發任務/截止日/品質驗收), team.yaml (人力與每週產能), github_snapshot.yaml (GitHub 唯讀同步快照), pending_github_actions.yaml (待核准 GitHub 操作佇列)。"
+        gh = live_state.get("github") or {}
         snapshot = {
             "project_name": live_state.get("project_name"),
             "audit": live_state.get("audit"),
@@ -390,6 +396,15 @@ def build_pack_assistant_prompt(
                 }
                 for t in live_state.get("tasks", [])
             ],
+            "github": {
+                "repo": gh.get("repo", ""),
+                "strict_no_push_until_approval": True,
+                "synced_at": gh.get("synced_at", ""),
+                "open_issues": [i for i in gh.get("issues", []) if i.get("state") == "open"][:15],
+                "open_prs": [p for p in gh.get("pull_requests", []) if p.get("state") == "open"][:10],
+                "milestones": gh.get("milestones", [])[:10],
+                "pending_proposals": gh.get("pending_proposals", []),
+            },
         }
 
     lines = [

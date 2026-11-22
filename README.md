@@ -75,7 +75,8 @@ skillpack rollback --target ./.agents/skills --skill sprint-operations
 skillpack launch --pack project-mgmt --agent agy --project-root . --open          # PM & Workforce Board
 skillpack launch --pack academic-research --agent claude --project-root . --open  # Research, Papers, Experiments & Ethics Board
 skillpack launch --pack exec-secretary-deck --agent codex --project-root . --open # Schedule, Decks & Approval Comms Board
-# Add --terminal to chat directly inside agy/claude/codex CLI while keeping the visual board open in browser!
+# Read-only GitHub PM sync (Issues, PRs, Milestones, CI) — STRICT NO PUSH UNTIL APPROVAL
+skillpack github-sync --project-root .
 ```
 
 ## Multi-Agent Target Paths (`--agent`)

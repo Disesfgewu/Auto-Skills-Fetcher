@@ -48,6 +48,16 @@ def _load_hubs_module():
         return None
 
 
+def _load_github_pm_module():
+    _load_hubs_module()
+    try:
+        from auto_skills_fetcher import github_pm
+
+        return github_pm
+    except ImportError:
+        return None
+
+
 def _load_audit_module():
     spec = importlib.util.spec_from_file_location("audit_project_hub", SCRIPT_DIR / "audit_project_hub.py")
     assert spec and spec.loader
@@ -416,6 +426,13 @@ def build_state_payload(
     charter_md = (hub_dir / "CHARTER.md").read_text(encoding="utf-8") if (hub_dir / "CHARTER.md").is_file() else ""
     arch_md = (hub_dir / "ARCHITECTURE.md").read_text(encoding="utf-8") if (hub_dir / "ARCHITECTURE.md").is_file() else ""
 
+    gh_mod = _load_github_pm_module()
+    gh_state = (
+        gh_mod.load_github_pm_state(hub_dir, project_root=session.project_root if session else None)
+        if gh_mod is not None
+        else {"repo": "", "strict_no_push_until_approval": True, "issues": [], "pull_requests": [], "milestones": [], "ci_runs": [], "pending_proposals": []}
+    )
+
     return {
         "pack": "project-mgmt",
         "hub_path": str(hub_dir.resolve()),
@@ -425,6 +442,7 @@ def build_state_payload(
         "team": team_data.get("members", []),
         "charter_md": charter_md,
         "architecture_md": arch_md,
+        "github": gh_state,
         "audit": audit,
         "assistant": assistant_snap,
     }
@@ -546,6 +564,58 @@ def create_server(
             if path == "/api/chat/reset":
                 session.reset()
                 self._send(HTTPStatus.OK, "application/json", b'{"ok":true}')
+                return
+
+            if path == "/api/github/sync":
+                gh_mod = _load_github_pm_module()
+                if gh_mod is None:
+                    self._send(HTTPStatus.INTERNAL_SERVER_ERROR, "application/json", b'{"ok":false,"error":"github_pm unavailable"}')
+                    return
+                try:
+                    snap = gh_mod.sync_github_readonly(
+                        hub_dir,
+                        repo=str(body.get("repo") or "").strip() or None,
+                        project_root=root_dir,
+                    )
+                    self._send(
+                        HTTPStatus.OK,
+                        "application/json; charset=utf-8",
+                        json.dumps({"ok": True, "snapshot": snap}, ensure_ascii=False).encode("utf-8"),
+                    )
+                except Exception as exc:
+                    self._send(
+                        HTTPStatus.BAD_REQUEST,
+                        "application/json; charset=utf-8",
+                        json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False).encode("utf-8"),
+                    )
+                return
+
+            if path == "/api/github/approve":
+                gh_mod = _load_github_pm_module()
+                if gh_mod is None:
+                    self._send(HTTPStatus.INTERNAL_SERVER_ERROR, "application/json", b'{"ok":false,"error":"github_pm unavailable"}')
+                    return
+                pid = str(body.get("proposal_id") or "")
+                explicit = bool(body.get("explicit_approval") is True)
+                try:
+                    res = gh_mod.execute_approved_proposal(hub_dir, pid, explicit_approval=explicit)
+                    self._send(
+                        HTTPStatus.OK,
+                        "application/json; charset=utf-8",
+                        json.dumps(res, ensure_ascii=False).encode("utf-8"),
+                    )
+                except Exception as exc:
+                    self._send(
+                        HTTPStatus.FORBIDDEN if isinstance(exc, PermissionError) else HTTPStatus.BAD_REQUEST,
+                        "application/json; charset=utf-8",
+                        json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False).encode("utf-8"),
+                    )
+                return
+
+            if path == "/api/github/reject":
+                gh_mod = _load_github_pm_module()
+                ok = gh_mod.reject_github_proposal(hub_dir, str(body.get("proposal_id") or "")) if gh_mod else False
+                self._send(HTTPStatus.OK if ok else HTTPStatus.NOT_FOUND, "application/json", json.dumps({"ok": ok}).encode("utf-8"))
                 return
 
             self._send(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"Not Found")
