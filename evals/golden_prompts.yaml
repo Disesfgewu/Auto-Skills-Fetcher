@@ -1,0 +1,44 @@
+version: 1
+
+golden_prompts:
+  academic:
+    - id: acad-01
+      slot: academic:citation-management
+      prompt: "Given a list of 5 arXiv preprints and DOIs, verify each citation against real publication metadata and output a deduplicated BibTeX file."
+      criteria:
+        - Requires explicit DOI/arXiv verification step rather than hallucinating metadata
+        - Produces valid BibTeX fields and flags unverified citations
+    - id: acad-02
+      slot: academic:literature-review
+      prompt: "Design a systematic literature review protocol with inclusion/exclusion criteria and a PRISMA screening table for LLM agent evaluation."
+      criteria:
+        - Defines explicit inclusion and exclusion rules
+        - Documents search queries and PRISMA flow counts
+
+  project_mgmt:
+    - id: pm-01
+      slot: pm:sprint-operations
+      prompt: "Break down an auth migration epic into a 2-week sprint plan with capacity checks, dependencies, and a machine-readable YAML status tracker."
+      criteria:
+        - Includes capacity and dependency checks
+        - Outputs machine-readable status tracking fields
+    - id: pm-02
+      slot: pm:roadmap-communication
+      prompt: "Translate our Q3 engineering backlog into an executive outcome roadmap and an internal dependency-focused plan."
+      criteria:
+        - Differentiates executive outcome framing from internal execution detail
+        - Preserves milestone consistency across variants
+
+  secretary_deck:
+    - id: sec-01
+      slot: secretary:pptx-builder
+      prompt: "Convert a 1-page quarterly business update into a 6-slide executive deck outline with one key message per slide and layout recommendations."
+      criteria:
+        - Enforces one message per slide and visual hierarchy
+        - Includes layout diversity and post-render visual verification
+    - id: sec-02
+      slot: secretary:meeting-notes
+      prompt: "Extract action items, owners, deadlines, and a draft follow-up email from a raw meeting transcript without sending the email automatically."
+      criteria:
+        - Separates decisions, owners, and due dates clearly
+        - Enforces explicit user confirmation before external email sending

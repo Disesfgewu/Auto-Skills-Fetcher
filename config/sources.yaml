@@ -1,0 +1,99 @@
+version: 1
+
+seed_repositories:
+  - repo: anthropics/skills
+    url: https://github.com/anthropics/skills
+    trust_tier: official
+    domains: [base, secretary_deck]
+  - repo: VoltAgent/awesome-agent-skills
+    url: https://github.com/VoltAgent/awesome-agent-skills
+    trust_tier: curated
+    domains: [base, academic, project_mgmt, secretary_deck]
+  - repo: ComposioHQ/awesome-claude-skills
+    url: https://github.com/ComposioHQ/awesome-claude-skills
+    trust_tier: curated
+    domains: [base, project_mgmt, secretary_deck]
+  - repo: O0000-code/awesome-academic-skills
+    url: https://github.com/O0000-code/awesome-academic-skills
+    trust_tier: curated
+    domains: [academic]
+  - repo: K-Dense-AI/scientific-agent-skills
+    url: https://github.com/k-dense-ai/scientific-agent-skills
+    trust_tier: community_verified
+    domains: [academic]
+  - repo: alirezarezvani/claude-skills
+    url: https://github.com/alirezarezvani/claude-skills
+    trust_tier: community_verified
+    domains: [project_mgmt, secretary_deck]
+
+domain_queries:
+  academic:
+    keywords:
+      - '"literature review"'
+      - '"citation"'
+      - '"BibTeX"'
+      - '"PRISMA"'
+      - '"arXiv"'
+    topics:
+      - academic-research
+      - scientific-skills
+    size_buckets:
+      - "1500..6000"
+      - "6001..15000"
+      - "15001..30000"
+  project_mgmt:
+    keywords:
+      - '"sprint"'
+      - '"roadmap"'
+      - '"backlog"'
+      - '"scrum"'
+      - '"OKR"'
+      - '"Jira"'
+    topics:
+      - project-management
+      - claude-code-skills
+    size_buckets:
+      - "1500..6000"
+      - "6001..15000"
+      - "15001..30000"
+  secretary_deck:
+    keywords:
+      - '"pptx"'
+      - '"slides"'
+      - '"meeting notes"'
+      - '"calendar"'
+      - '"executive"'
+    topics:
+      - office-skills
+      - agent-skills
+    size_buckets:
+      - "1500..6000"
+      - "6001..15000"
+      - "15001..30000"
+
+scoring:
+  weights:
+    popularity: 0.20
+    freshness: 0.15
+    structure: 0.20
+    domain: 0.30
+    trust: 0.15
+  freshness_half_life_days: 180.0
+  max_recommended_tokens: 5000
+  slot_similarity_threshold: 0.78
+  new_capability_min_score: 82.0
+  hysteresis_margins:
+    academic: 12.0
+    project_mgmt: 8.0
+    secretary_deck: 6.0
+    base: 10.0
+
+trusted_orgs:
+  - anthropics
+  - googleworkspace
+  - vercel-labs
+  - supabase
+  - K-Dense-AI
+  - ComposioHQ
+  - VoltAgent
+  - bytedance

@@ -1,0 +1,111 @@
+version: 1
+
+packs:
+  base-office:
+    description: Shared foundational document processing skills inherited by domain packs.
+    domain: base
+    update_policy: track-with-diff
+    hysteresis_margin: 10.0
+    skills:
+      - slot: base:pdf-toolkit
+        name: pdf
+        repo: anthropics/skills
+        path: skills/pdf/SKILL.md
+        url: https://github.com/anthropics/skills
+      - slot: base:docx-toolkit
+        name: docx
+        repo: anthropics/skills
+        path: skills/docx/SKILL.md
+        url: https://github.com/anthropics/skills
+      - slot: base:xlsx-toolkit
+        name: xlsx
+        repo: anthropics/skills
+        path: skills/xlsx/SKILL.md
+        url: https://github.com/anthropics/skills
+
+  academic-research:
+    description: 學術研究助手：涵蓋系統性文獻回顧、引文驗證與 BibTeX 管理、檢索軌跡與論文起草。
+    domain: academic
+    extends:
+      - base-office
+    update_policy: pinned
+    hysteresis_margin: 12.0
+    skills:
+      - slot: academic:literature-review
+        name: literature-review
+        repo: K-Dense-AI/scientific-agent-skills
+        path: skills/literature-review/SKILL.md
+        url: https://github.com/k-dense-ai/scientific-agent-skills/blob/main/skills/literature-review/SKILL.md
+      - slot: academic:citation-management
+        name: citation-management
+        repo: K-Dense-AI/claude-scientific-skills
+        path: skills/citation-management/SKILL.md
+        url: https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/skills/citation-management/SKILL.md
+      - slot: academic:research-lookup
+        name: research-lookup
+        repo: K-Dense-AI/scientific-agent-skills
+        path: skills/research-lookup/SKILL.md
+        url: https://github.com/k-dense-ai/scientific-agent-skills/blob/main/skills/research-lookup/SKILL.md
+      - slot: academic:academic-paper
+        name: academic-paper
+        repo: Imbad0202/academic-research-skills
+        path: academic-paper/SKILL.md
+        url: https://github.com/Imbad0202/academic-research-skills/blob/main/academic-paper/SKILL.md
+
+  project-mgmt:
+    description: 專案管理與工作分配助手：涵蓋路線圖排序、Sprint 拆解、專案治理與多受眾匯報。
+    domain: project_mgmt
+    extends:
+      - base-office
+    update_policy: track-with-diff
+    hysteresis_margin: 8.0
+    skills:
+      - slot: pm:roadmap-planning
+        name: roadmap-planning
+        repo: rampstackco/claude-skills
+        path: skills/roadmap-planning/SKILL.md
+        url: https://github.com/rampstackco/claude-skills/blob/main/skills/roadmap-planning/SKILL.md
+      - slot: pm:sprint-operations
+        name: sprint-operations
+        repo: rampstackco/claude-skills
+        path: skills/sprint-operations/SKILL.md
+        url: https://github.com/rampstackco/claude-skills/blob/main/skills/sprint-operations/SKILL.md
+      - slot: pm:roadmap-communication
+        name: roadmap-communication
+        repo: borghei/Claude-Skills
+        path: project-management/execution/roadmap-communication/SKILL.md
+        url: https://github.com/borghei/Claude-Skills/blob/main/project-management/execution/roadmap-communication/SKILL.md
+      - slot: pm:sprint-plan-tracker
+        name: sprint-plan
+        repo: Donchitos/Claude-Code-Game-Studios
+        path: .claude/skills/sprint-plan/SKILL.md
+        url: https://github.com/Donchitos/Claude-Code-Game-Studios/blob/main/.claude/skills/sprint-plan/SKILL.md
+
+  exec-secretary-deck:
+    description: 個人秘書與簡報生成助手：涵蓋投影片設計、視覺主題、會議紀要與內部溝通。
+    domain: secretary_deck
+    extends:
+      - base-office
+    update_policy: side-by-side
+    hysteresis_margin: 6.0
+    skills:
+      - slot: secretary:pptx-builder
+        name: pptx
+        repo: anthropics/skills
+        path: skills/pptx/SKILL.md
+        url: https://github.com/anthropics/skills
+      - slot: secretary:theme-factory
+        name: theme-factory
+        repo: anthropics/skills
+        path: skills/theme-factory/SKILL.md
+        url: https://github.com/anthropics/skills
+      - slot: secretary:internal-comms
+        name: internal-comms
+        repo: anthropics/skills
+        path: skills/internal-comms/SKILL.md
+        url: https://github.com/anthropics/skills
+      - slot: secretary:meeting-notes
+        name: meeting-notes
+        repo: claude-office-skills/skills
+        path: meeting-notes/SKILL.md
+        url: https://github.com/claude-office-skills/skills

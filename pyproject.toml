@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "auto-skills-fetcher"
+version = "0.1.0"
+description = "Automated GitHub AI Agent Skills crawler, 5-dimension scorer, Champion-Challenger recommender, and modular skill pack manager."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = [
+    "PyYAML>=6.0",
+]
+
+[project.scripts]
+skillpack = "auto_skills_fetcher.cli:main"
+auto-skills-fetcher = "auto_skills_fetcher.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
