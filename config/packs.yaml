@@ -30,6 +30,12 @@ packs:
       - base-office
     update_policy: pinned
     hysteresis_margin: 12.0
+    auto_expand:
+      enabled: true
+      min_score: 78.0
+      max_skills: 30
+      max_add_per_run: 3
+      allow_replace: false
     skills:
       # 1. 研究規劃、題目評估與進度追蹤
       - slot: academic:research-progress
@@ -128,12 +134,18 @@ packs:
         url: https://github.com/Imbad0202/academic-research-skills/blob/main/academic-paper/SKILL.md
 
   project-mgmt:
-    description: 專案管理與工作分配助手：涵蓋路線圖排序、Sprint 拆解、專案治理與多受眾匯報。
+    description: 全流程專案管理與工作分配助手：涵蓋路線圖排序、Sprint 拆解與進度追蹤、Backlog 分流、依賴與風險控管、人力產能規劃、變革管理、事後檢討與多受眾匯報。
     domain: project_mgmt
     extends:
       - base-office
     update_policy: track-with-diff
     hysteresis_margin: 8.0
+    auto_expand:
+      enabled: true
+      min_score: 75.0
+      max_skills: 25
+      max_add_per_run: 3
+      allow_replace: false
     skills:
       - slot: pm:roadmap-planning
         name: roadmap-planning
@@ -155,14 +167,55 @@ packs:
         repo: Donchitos/Claude-Code-Game-Studios
         path: .claude/skills/sprint-plan/SKILL.md
         url: https://github.com/Donchitos/Claude-Code-Game-Studios/blob/main/.claude/skills/sprint-plan/SKILL.md
+      - slot: pm:backlog-triage
+        name: backlog-triage
+        repo: rampstackco/claude-skills
+        path: skills/backlog-triage/SKILL.md
+        url: https://github.com/rampstackco/claude-skills/blob/main/skills/backlog-triage/SKILL.md
+      - slot: pm:dependency-management
+        name: dependency-management
+        repo: rampstackco/claude-skills
+        path: skills/dependency-management/SKILL.md
+        url: https://github.com/rampstackco/claude-skills/blob/main/skills/dependency-management/SKILL.md
+      - slot: pm:after-action-report
+        name: after-action-report
+        repo: rampstackco/claude-skills
+        path: skills/after-action-report/SKILL.md
+        url: https://github.com/rampstackco/claude-skills/blob/main/skills/after-action-report/SKILL.md
+      - slot: pm:capacity-planner
+        name: capacity-planner
+        repo: borghei/Claude-Skills
+        path: business-operations/capacity-planner/SKILL.md
+        url: https://github.com/borghei/Claude-Skills/blob/main/business-operations/capacity-planner/SKILL.md
+      - slot: pm:change-management
+        name: change-management
+        repo: borghei/Claude-Skills
+        path: c-level-advisor/change-management/SKILL.md
+        url: https://github.com/borghei/Claude-Skills/blob/main/c-level-advisor/change-management/SKILL.md
+      - slot: pm:project-manager-suite
+        name: cs-project-manager
+        repo: alirezarezvani/claude-skills
+        path: .gemini/skills/cs-project-manager/SKILL.md
+        url: https://github.com/alirezarezvani/claude-skills/blob/main/.gemini/skills/cs-project-manager/SKILL.md
+      - slot: pm:agile-product-owner
+        name: cs-agile-product-owner
+        repo: alirezarezvani/claude-skills
+        path: .gemini/skills/cs-agile-product-owner/SKILL.md
+        url: https://github.com/alirezarezvani/claude-skills/blob/main/.gemini/skills/cs-agile-product-owner/SKILL.md
 
   exec-secretary-deck:
-    description: 個人秘書與簡報生成助手：涵蓋投影片設計、視覺主題、會議紀要與內部溝通。
+    description: 全方位個人秘書與簡報生成助手：涵蓋投影片與董事會簡報設計、視覺主題與品牌規範、圖表與流程圖繪製、文件共筆、行事曆排程、會議紀要、幕僚長協調與內部溝通。
     domain: secretary_deck
     extends:
       - base-office
     update_policy: side-by-side
     hysteresis_margin: 6.0
+    auto_expand:
+      enabled: true
+      min_score: 75.0
+      max_skills: 25
+      max_add_per_run: 3
+      allow_replace: false
     skills:
       - slot: secretary:pptx-builder
         name: pptx
@@ -184,3 +237,43 @@ packs:
         repo: claude-office-skills/skills
         path: meeting-notes/SKILL.md
         url: https://github.com/claude-office-skills/skills
+      - slot: secretary:doc-coauthoring
+        name: doc-coauthoring
+        repo: anthropics/skills
+        path: skills/doc-coauthoring/SKILL.md
+        url: https://github.com/anthropics/skills/blob/main/skills/doc-coauthoring/SKILL.md
+      - slot: secretary:brand-guidelines
+        name: brand-guidelines
+        repo: anthropics/skills
+        path: skills/brand-guidelines/SKILL.md
+        url: https://github.com/anthropics/skills/blob/main/skills/brand-guidelines/SKILL.md
+      - slot: secretary:board-deck-builder
+        name: board-deck-builder
+        repo: borghei/Claude-Skills
+        path: c-level-advisor/board-deck-builder/SKILL.md
+        url: https://github.com/borghei/Claude-Skills/blob/main/c-level-advisor/board-deck-builder/SKILL.md
+      - slot: secretary:board-meeting
+        name: board-meeting
+        repo: borghei/Claude-Skills
+        path: c-level-advisor/board-meeting/SKILL.md
+        url: https://github.com/borghei/Claude-Skills/blob/main/c-level-advisor/board-meeting/SKILL.md
+      - slot: secretary:chief-of-staff
+        name: chief-of-staff
+        repo: borghei/Claude-Skills
+        path: c-level-advisor/chief-of-staff/SKILL.md
+        url: https://github.com/borghei/Claude-Skills/blob/main/c-level-advisor/chief-of-staff/SKILL.md
+      - slot: secretary:calendar-automation
+        name: calendar-automation
+        repo: claude-office-skills/skills
+        path: calendar-automation/SKILL.md
+        url: https://github.com/claude-office-skills/skills/blob/main/calendar-automation/SKILL.md
+      - slot: secretary:chart-designer
+        name: chart-designer
+        repo: claude-office-skills/skills
+        path: chart-designer/SKILL.md
+        url: https://github.com/claude-office-skills/skills/blob/main/chart-designer/SKILL.md
+      - slot: secretary:diagram-creator
+        name: diagram-creator
+        repo: claude-office-skills/skills
+        path: diagram-creator/SKILL.md
+        url: https://github.com/claude-office-skills/skills/blob/main/diagram-creator/SKILL.md

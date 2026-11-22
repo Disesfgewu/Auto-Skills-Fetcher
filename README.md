@@ -15,8 +15,8 @@ Automated discovery, security auditing, 5-dimension scoring, Champion–Challeng
 ## Preset Skill Packs (`config/packs.yaml`)
 
 - **`academic-research`** (`pinned`, $\Delta \ge 12$, 21 skills): Full research lifecycle — progress & workflow tracking (`vibe-research-workflow`, `idea-evaluator`, `hypothesis-generation`), paper crawling & literature review (`paper-download`, `paper-lookup`, `literature-review`, `citation-management`), experiments & testing (`experimental-design`, `baseline-runner`, `ml-experiment-tracker`, `statistical-analysis`, `scientific-visualization`), academic ethics & peer review (`plagiarism-detection-guide`, `web-scraping-ethics-guide`, `scientific-critical-thinking`, `peer-review`, `rebuttal-guidance`), and paper drafting (`academic-paper`) + `base-office`.
-- **`project-mgmt`** (`track-with-diff`, $\Delta \ge 8$): Roadmap planning, sprint operations, multi-audience roadmap communication, YAML sprint status tracker + `base-office`.
-- **`exec-secretary-deck`** (`side-by-side`, $\Delta \ge 6$): PowerPoint generation, theme styling, internal communications, meeting notes + `base-office`.
+- **`project-mgmt`** (`track-with-diff`, $\Delta \ge 8$, 14 skills, auto-expand enabled): Roadmap planning, sprint operations, backlog triage, dependency & risk management, capacity planning, change management, after-action reports, agile product ownership + `base-office`.
+- **`exec-secretary-deck`** (`side-by-side`, $\Delta \ge 6$, 15 skills, auto-expand enabled): PowerPoint & board deck building, theme styling, brand guidelines, doc co-authoring, chief-of-staff briefings, calendar automation, charts/diagrams, meeting notes & internal comms + `base-office`.
 
 ## Quick Start
 
@@ -35,8 +35,12 @@ skillpack status
 skillpack show --pack academic-research
 skillpack show --agent all --scope project --project-root .
 
-# Discover newly exploding / trending skill repos across all of GitHub (not limited to fixed seed repos)
-skillpack discover --domain academic --days 90 --min-stars 30
+# Discover newly exploding / trending skill repos across ALL domains (not limited to fixed seed repos)
+skillpack discover --domain all --days 90 --min-stars 30
+
+# Auto-expand ALL packs (academic, project-mgmt, exec-secretary-deck) with security-verified, non-colliding skills
+skillpack expand --pack all --discover            # preview proposals
+skillpack expand --pack all --auto --agent all    # auto-promote into packs.yaml & deploy to agy/claude/codex
 
 # Deep security & prompt-injection audit over installed skills and local registry
 skillpack audit --agent all --scope project --registry

@@ -16,6 +16,7 @@ import yaml
 
 from .matcher import cosine_similarity
 from .parser import compute_content_hash
+from .security import scan_skill_security
 
 SUPPORTED_AGENTS = ("agy", "claude", "codex")
 
@@ -109,6 +110,244 @@ def load_yaml_config(path: str | Path) -> dict[str, Any]:
     with Path(path).open("r", encoding="utf-8") as fh:
         data = yaml.safe_load(fh)
     return data if isinstance(data, dict) else {}
+
+
+def save_yaml_config(path: str | Path, data: dict[str, Any]) -> None:
+    """Write YAML config cleanly while preserving key order and UTF-8 text."""
+    Path(path).write_text(
+        yaml.safe_dump(data, sort_keys=False, allow_unicode=True, width=120),
+        encoding="utf-8",
+    )
+
+
+@dataclass
+class ExpansionProposal:
+    """Proposed automatic pack expansion (add new capability or replace weaker champion)."""
+
+    action: str  # "add" | "replace"
+    pack_name: str
+    domain: str
+    slot: str
+    skill_id: str
+    name: str
+    repo: str
+    path: str
+    url: str
+    score: float
+    stars: int
+    stars_90d_growth: int
+    replaces_name: str | None = None
+    replaces_score: float | None = None
+    similarity: float = 0.0
+    rationale: str = ""
+
+
+def plan_pack_expansion(
+    packs_cfg: dict[str, Any],
+    sources_cfg: dict[str, Any],
+    pack_name: str,
+    *,
+    champions_by_id: dict[str, Any],
+    candidates: list[Any],
+    min_score_override: float | None = None,
+    max_add_override: int | None = None,
+    allow_replace: bool = False,
+    collision_threshold: float = 0.72,
+) -> list[ExpansionProposal]:
+    """Plan safe, non-colliding auto-expansion proposals for any configured pack."""
+    packs = packs_cfg.get("packs", {})
+    if pack_name not in packs:
+        raise KeyError(f"Unknown pack '{pack_name}'.")
+
+    pack_cfg = packs[pack_name]
+    domain = str(pack_cfg.get("domain", "base"))
+    ae_cfg = pack_cfg.get("auto_expand", {}) if isinstance(pack_cfg.get("auto_expand"), dict) else {}
+    if ae_cfg.get("enabled") is False:
+        return []
+
+    scoring_cfg = sources_cfg.get("scoring", {})
+    sim_threshold = float(scoring_cfg.get("slot_similarity_threshold", 0.78))
+    margin = float(
+        pack_cfg.get(
+            "hysteresis_margin",
+            scoring_cfg.get("hysteresis_margins", {}).get(domain, 10.0),
+        )
+    )
+    min_score = (
+        float(min_score_override)
+        if min_score_override is not None
+        else float(ae_cfg.get("min_score", 78.0))
+    )
+    max_skills = int(ae_cfg.get("max_skills", 25))
+    max_add = (
+        int(max_add_override)
+        if max_add_override is not None
+        else int(ae_cfg.get("max_add_per_run", 3))
+    )
+    can_replace = bool(allow_replace or ae_cfg.get("allow_replace", False))
+
+    resolved = resolve_pack_skills(packs_cfg, pack_name)
+    existing_ids = {f"{item['repo']}:{item['path']}" for item in resolved}
+    existing_names = {item["name"] for item in resolved}
+    existing_sigs: list[tuple[dict[str, Any], str, float]] = []
+    for item in resolved:
+        sid = f"{item['repo']}:{item['path']}"
+        rec = champions_by_id.get(sid)
+        sig = f"{rec.name} {rec.description}" if rec else item["name"]
+        sc = rec.score.total if (rec and rec.score) else 0.0
+        existing_sigs.append((item, sig, sc))
+
+    # Rank candidates by total score then 90d growth momentum
+    ranked = sorted(
+        candidates,
+        key=lambda c: (
+            c.score.total if c.score else 0.0,
+            getattr(c, "stars_90d_growth", 0),
+            getattr(c, "stars", 0),
+        ),
+        reverse=True,
+    )
+
+    proposals: list[ExpansionProposal] = []
+    accepted_sigs: list[str] = []
+    added_count = 0
+    current_total = len(resolved)
+
+    for cand in ranked:
+        if cand.domain != domain:
+            continue
+        if not cand.security_passed or cand.score is None:
+            continue
+        # Defense-in-depth: re-verify static prompt-injection & security gate
+        if not scan_skill_security(cand.raw_content).passed:
+            continue
+        if cand.skill_id in existing_ids or cand.name in existing_names:
+            continue
+        if cand.score.total < min_score:
+            continue
+
+        cand_sig = f"{cand.name} {cand.description}"
+        best_item: dict[str, Any] | None = None
+        best_sim = 0.0
+        best_score = 0.0
+        for item, sig, sc in existing_sigs:
+            sim = cosine_similarity(cand_sig, sig)
+            if sim > best_sim:
+                best_sim = sim
+                best_item = item
+                best_score = sc
+
+        # Prevent collisions with candidates already accepted in this same expansion run
+        if any(cosine_similarity(cand_sig, prev_sig) >= collision_threshold for prev_sig in accepted_sigs):
+            continue
+
+        if best_item is not None and best_sim >= sim_threshold:
+            delta = round(cand.score.total - best_score, 2)
+            if can_replace and delta >= margin and best_item.get("source_pack") == pack_name:
+                proposals.append(
+                    ExpansionProposal(
+                        action="replace",
+                        pack_name=pack_name,
+                        domain=domain,
+                        slot=str(best_item.get("slot") or f"{domain}:{cand.name}"),
+                        skill_id=cand.skill_id,
+                        name=cand.name,
+                        repo=cand.repo,
+                        path=cand.path,
+                        url=cand.url,
+                        score=cand.score.total,
+                        stars=cand.stars,
+                        stars_90d_growth=cand.stars_90d_growth,
+                        replaces_name=best_item["name"],
+                        replaces_score=round(best_score, 2),
+                        similarity=round(best_sim, 3),
+                        rationale=(
+                            f"Replaces '{best_item['name']}' ({best_score:.1f}) with '{cand.name}' "
+                            f"({cand.score.total:.1f}, +{delta:.1f} >= {margin}, sim={best_sim:.2f})."
+                        ),
+                    )
+                )
+                existing_names.add(cand.name)
+                existing_ids.add(cand.skill_id)
+                accepted_sigs.append(cand_sig)
+            continue
+
+        # Reject ambiguous mid-similarity zone [collision_threshold, sim_threshold)
+        if best_sim >= collision_threshold:
+            continue
+
+        if added_count >= max_add or current_total + added_count >= max_skills:
+            continue
+
+        clean_slot_name = re.sub(r"[^a-z0-9-]+", "-", cand.name.lower()).strip("-") or "skill"
+        proposals.append(
+            ExpansionProposal(
+                action="add",
+                pack_name=pack_name,
+                domain=domain,
+                slot=f"{domain}:{clean_slot_name}",
+                skill_id=cand.skill_id,
+                name=cand.name,
+                repo=cand.repo,
+                path=cand.path,
+                url=cand.url,
+                score=cand.score.total,
+                stars=cand.stars,
+                stars_90d_growth=cand.stars_90d_growth,
+                similarity=round(best_sim, 3),
+                rationale=(
+                    f"Adds new non-colliding capability '{cand.name}' "
+                    f"(score={cand.score.total:.1f}, stars={cand.stars}, 90d_growth={cand.stars_90d_growth}, "
+                    f"max_sim={best_sim:.2f} < {collision_threshold})."
+                ),
+            )
+        )
+        existing_names.add(cand.name)
+        existing_ids.add(cand.skill_id)
+        accepted_sigs.append(cand_sig)
+        added_count += 1
+
+    return proposals
+
+
+def apply_pack_expansion(
+    packs_cfg: dict[str, Any],
+    proposals: list[ExpansionProposal],
+) -> int:
+    """Mutate packs_cfg in memory with approved ExpansionProposals; returns count applied."""
+    applied = 0
+    packs = packs_cfg.get("packs", {})
+    for prop in proposals:
+        pack = packs.get(prop.pack_name)
+        if not isinstance(pack, dict):
+            continue
+        skills_list = pack.setdefault("skills", [])
+        entry = {
+            "slot": prop.slot,
+            "name": prop.name,
+            "repo": prop.repo,
+            "path": prop.path,
+            "url": prop.url,
+        }
+        if prop.action == "replace" and prop.replaces_name:
+            replaced = False
+            for idx, item in enumerate(skills_list):
+                if item.get("name") == prop.replaces_name or item.get("slot") == prop.slot:
+                    skills_list[idx] = entry
+                    replaced = True
+                    break
+            if not replaced:
+                skills_list.append(entry)
+            applied += 1
+        elif prop.action == "add":
+            if not any(
+                item.get("name") == prop.name
+                or (item.get("repo") == prop.repo and item.get("path") == prop.path)
+                for item in skills_list
+            ):
+                skills_list.append(entry)
+                applied += 1
+    return applied
 
 
 def resolve_pack_skills(packs_cfg: dict[str, Any], pack_name: str) -> list[dict[str, Any]]:

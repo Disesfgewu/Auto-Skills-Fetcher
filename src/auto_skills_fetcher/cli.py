@@ -13,12 +13,15 @@ from .matcher import recommend_replacements
 from .models import SkillRecord
 from .pack_manager import (
     PackManager,
+    apply_pack_expansion,
     build_semantic_diff,
     bundle_cache_dir,
     load_yaml_config,
+    plan_pack_expansion,
     resolve_agent_targets,
     resolve_pack_skills,
     save_skill_bundle,
+    save_yaml_config,
 )
 from .parser import compute_content_hash, parse_skill_md
 from .registry import SkillRegistry
@@ -1045,6 +1048,153 @@ def _cmd_audit(args: argparse.Namespace) -> int:
     return 1 if any_blocked else 0
 
 
+def _cmd_expand(args: argparse.Namespace) -> int:
+    packs_cfg = load_yaml_config(args.packs_config)
+    sources_cfg = load_yaml_config(args.sources_config)
+    packs = packs_cfg.get("packs", {})
+
+    if args.pack == "all":
+        target_packs = [
+            pname
+            for pname, pcfg in packs.items()
+            if pcfg.get("domain") != "base"
+            and (pcfg.get("auto_expand") or {}).get("enabled", True) is not False
+        ]
+    else:
+        if args.pack not in packs:
+            print(f"Unknown pack '{args.pack}'. Available: {sorted(packs.keys())}", file=sys.stderr)
+            return 2
+        target_packs = [args.pack]
+
+    # Optional live dynamic trending discovery across every target pack's domain first
+    if args.discover:
+        domains = sorted({str(packs[p].get("domain", "")) for p in target_packs if packs[p].get("domain")})
+        for dom in domains:
+            if dom not in sources_cfg.get("domain_queries", {}):
+                continue
+            disc_ns = argparse.Namespace(
+                db=args.db,
+                packs_config=args.packs_config,
+                sources_config=args.sources_config,
+                domain=dom,
+                days=args.days,
+                min_stars=args.min_stars,
+                max_repos=args.max_repos,
+                max_skills_per_repo=args.max_skills_per_repo,
+                dry_run=False,
+            )
+            _cmd_discover(disc_ns)
+
+    reg = SkillRegistry(args.db)
+    try:
+        champions = {s.skill_id: s for s in reg.list_skills(champions_only=True)}
+        all_candidates = reg.list_skills(candidates_only=True)
+
+        report: list[dict] = []
+        approved_all = []
+        changed_packs: list[str] = []
+
+        for pname in target_packs:
+            proposals = plan_pack_expansion(
+                packs_cfg,
+                sources_cfg,
+                pname,
+                champions_by_id=champions,
+                candidates=all_candidates,
+                min_score_override=args.min_score,
+                max_add_override=args.max_add,
+                allow_replace=bool(args.allow_replace),
+            )
+            pack_approved = []
+            for prop in proposals:
+                if args.auto:
+                    pack_approved.append(prop)
+                elif args.interactive:
+                    print(
+                        f"\n[{pname}] [{prop.action.upper()}] {prop.name} ({prop.repo}) — "
+                        f"score={prop.score:.1f}, stars={prop.stars}, 90d_growth={prop.stars_90d_growth}"
+                    )
+                    print(f"  {prop.rationale}")
+                    ans = input("Promote into pack? [y/N]: ").strip().lower()
+                    if ans in {"y", "yes"}:
+                        pack_approved.append(prop)
+
+            if pack_approved:
+                changed_packs.append(pname)
+                approved_all.extend(pack_approved)
+
+            report.append(
+                {
+                    "pack": pname,
+                    "domain": packs[pname].get("domain"),
+                    "proposals": [p.__dict__ for p in proposals],
+                    "applied_count": len(pack_approved),
+                }
+            )
+
+        if approved_all:
+            apply_pack_expansion(packs_cfg, approved_all)
+            save_yaml_config(args.packs_config, packs_cfg)
+            # Promote approved records to champions in SQLite
+            by_id = {c.skill_id: c for c in all_candidates}
+            for prop in approved_all:
+                rec = by_id.get(prop.skill_id)
+                if rec:
+                    rec.is_champion = True
+                    rec.slot = prop.slot
+                    reg.upsert_skill(rec)
+
+        if args.json:
+            print(
+                json.dumps(
+                    {"packs": report, "total_applied": len(approved_all)},
+                    indent=2,
+                    ensure_ascii=False,
+                )
+            )
+        else:
+            for item in report:
+                print(
+                    f"\nAuto-Expand [{item['pack']}] (domain={item['domain']}): "
+                    f"{len(item['proposals'])} eligible candidate(s), {item['applied_count']} applied"
+                )
+                if not item["proposals"]:
+                    print("  No new security-verified, non-colliding candidates exceeded the expansion threshold.")
+                for p in item["proposals"]:
+                    print(
+                        f"  [{p['action'].upper()}] {p['name']} ({p['repo']}) — "
+                        f"score={p['score']:.1f}, stars={p['stars']}, 90d_growth={p['stars_90d_growth']}"
+                    )
+                    print(f"    {p['rationale']}")
+            if approved_all:
+                print(f"\nUpdated {args.packs_config} with {len(approved_all)} promoted skill(s).")
+            elif any(item["proposals"] for item in report):
+                print(
+                    "\nPreview only. Pass '--auto' or '--interactive' to promote these skills into packs.yaml."
+                )
+
+        # Optionally re-assemble changed packs directly to target agents
+        if approved_all and (args.agent or args.target):
+            for pname in changed_packs:
+                asm_ns = argparse.Namespace(
+                    db=args.db,
+                    packs_config=args.packs_config,
+                    sources_config=args.sources_config,
+                    pack=pname,
+                    target=args.target,
+                    agent=args.agent,
+                    scope=args.scope,
+                    project_root=args.project_root,
+                    fetch=False,
+                    prune=False,
+                )
+                _cmd_assemble(asm_ns)
+
+        return 0
+    finally:
+        reg.close()
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="skillpack",
@@ -1148,6 +1298,32 @@ def build_parser() -> argparse.ArgumentParser:
     p_audit.add_argument("--registry", action="store_true", help="Also audit all skills stored in SQLite registry.")
     p_audit.add_argument("--json", action="store_true", help="Output JSON.")
     p_audit.set_defaults(func=_cmd_audit)
+
+    p_exp = sub.add_parser(
+        "expand",
+        help="Auto-expand any or all skill packs with high-scoring, security-clean, non-colliding skills.",
+    )
+    p_exp.add_argument("--pack", default="all", help="Pack name from packs.yaml or 'all' (default: all).")
+    p_exp.add_argument(
+        "--discover",
+        action="store_true",
+        help="Run dynamic trending GitHub repo discovery across target pack domains before expanding.",
+    )
+    p_exp.add_argument("--days", type=int, default=90, help="Lookback window when using --discover.")
+    p_exp.add_argument("--min-stars", type=int, default=25, help="Min stars when using --discover.")
+    p_exp.add_argument("--max-repos", type=int, default=6, help="Max trending repos per domain with --discover.")
+    p_exp.add_argument("--max-skills-per-repo", type=int, default=4, help="Max skills per repo with --discover.")
+    p_exp.add_argument("--min-score", type=float, help="Override pack min_score threshold.")
+    p_exp.add_argument("--max-add", type=int, help="Override pack max_add_per_run cap.")
+    p_exp.add_argument("--allow-replace", action="store_true", help="Also allow replacing weaker champions.")
+    p_exp.add_argument("--auto", action="store_true", help="Automatically promote eligible skills into packs.yaml.")
+    p_exp.add_argument("--interactive", action="store_true", help="Prompt before promoting each candidate.")
+    p_exp.add_argument("--target", help="Optionally re-assemble updated pack into custom directory.")
+    p_exp.add_argument("--agent", choices=["agy", "claude", "codex", "all"], help="Optionally re-assemble to agents.")
+    p_exp.add_argument("--scope", choices=["project", "global"], default="project")
+    p_exp.add_argument("--project-root", default=".")
+    p_exp.add_argument("--json", action="store_true", help="Output JSON.")
+    p_exp.set_defaults(func=_cmd_expand)
 
     p_rec = sub.add_parser("recommend", help="Run Champion-Challenger replacement scoring.")
     p_rec.add_argument("--domain", default="all", help="Domain name or 'all'.")

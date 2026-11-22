@@ -74,6 +74,10 @@ domain_queries:
       - '"scrum"'
       - '"OKR"'
       - '"Jira"'
+      - '"risk management"'
+      - '"capacity planning"'
+      - '"postmortem"'
+      - '"stakeholder"'
     topics:
       - project-management
       - claude-code-skills
@@ -88,6 +92,11 @@ domain_queries:
       - '"meeting notes"'
       - '"calendar"'
       - '"executive"'
+      - '"board deck"'
+      - '"briefing"'
+      - '"email draft"'
+      - '"diagram"'
+      - '"brand guidelines"'
     topics:
       - office-skills
       - agent-skills
@@ -123,6 +132,9 @@ trusted_orgs:
   - Imbad0202
   - Orchestra-Research
   - tsingyuai
+  - alirezarezvani
+  - rampstackco
+  - borghei
   - ComposioHQ
   - VoltAgent
   - bytedance
