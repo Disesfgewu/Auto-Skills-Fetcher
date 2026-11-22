@@ -29,6 +29,25 @@ SKILL_ROOT = SCRIPT_DIR.parent
 DASHBOARD_HTML = SKILL_ROOT / "assets" / "dashboard.html"
 
 
+def _load_hubs_module():
+    try:
+        from auto_skills_fetcher import assistant_hubs
+
+        return assistant_hubs
+    except ImportError:
+        # Fallback when invoked directly from repo without PYTHONPATH
+        repo_src = SKILL_ROOT.parent.parent / "src"
+        if repo_src.is_dir() and str(repo_src) not in sys.path:
+            sys.path.insert(0, str(repo_src))
+            try:
+                from auto_skills_fetcher import assistant_hubs
+
+                return assistant_hubs
+            except ImportError:
+                return None
+        return None
+
+
 def _load_audit_module():
     spec = importlib.util.spec_from_file_location("audit_project_hub", SCRIPT_DIR / "audit_project_hub.py")
     assert spec and spec.loader
@@ -90,47 +109,34 @@ def build_pm_prompt(
     user_message: str,
     hub_dir: Path,
     *,
+    pack_name: str = "project-mgmt",
     history: list[dict[str, str]] | None = None,
     include_history: bool = False,
 ) -> str:
-    """Wrap user's PM request with live project-hub audit state so agy/claude/codex answers & edits smoothly."""
-    live_state = build_state_payload(hub_dir)
+    """Wrap user's request with live workspace snapshot so agy/claude/codex answers & edits smoothly."""
+    live_state = build_state_payload(hub_dir, pack_name=pack_name)
+    hubs = _load_hubs_module()
+    if hubs is not None:
+        return hubs.build_pack_assistant_prompt(
+            pack_name,
+            user_message,
+            hub_dir,
+            live_state,
+            history=history,
+            include_history=include_history,
+        )
     compact_snapshot = {
         "project_name": live_state["project_name"],
         "audit": live_state["audit"],
-        "team": live_state["team"],
-        "tasks": [
-            {
-                "id": t.get("id"),
-                "title": t.get("title"),
-                "objective_id": t.get("objective_id"),
-                "assignee": t.get("assignee"),
-                "due_date": t.get("due_date"),
-                "estimated_hours": t.get("estimated_hours"),
-                "status": t.get("status"),
-                "qa_status": t.get("qa_status"),
-            }
-            for t in live_state["tasks"]
-        ],
+        "team": live_state.get("team", []),
+        "tasks": live_state.get("tasks", []),
     }
     lines = [
         "你是本專案的互動式「專案管理指揮中心助手」(請遵循 project-command-center skill)。",
         f"專案治理資料夾位於: {hub_dir.resolve()}",
-        "包含: CHARTER.md (計劃書), ARCHITECTURE.md (完整架構圖), objectives.yaml (專案目標), tasks.yaml (派發任務/截止日/品質驗收), team.yaml (人力與每週產能)。",
-        "以下是最新的專案即時稽核與人力負荷快照（JSON）：",
         json.dumps(compact_snapshot, ensure_ascii=False),
-        "規則：",
-        "1. 優先根據上方快照或直接讀寫 project-hub/ 檔案回答與處理，非必要請勿執行 shell 指令。",
-        "2. 若使用者要求派發/調整任務、平衡人力、更新進度或補充驗收條件，請直接編輯 project-hub/ 下對應檔案，前端視覺化看板會自動即時刷新。",
-        "3. 請用繁體中文、條理清晰簡潔回覆，並明確列出已修改的項目或具體建議。",
+        f"\n使用者指示：{user_message}",
     ]
-    if include_history and history:
-        recent = history[-6:]
-        lines.append("\n近期對話摘要：")
-        for msg in recent:
-            role = "使用者" if msg.get("role") == "user" else f"助手({msg.get('agent', '')})"
-            lines.append(f"- {role}: {str(msg.get('content', ''))[:400]}")
-    lines.append(f"\n使用者指示：{user_message}")
     return "\n".join(lines)
 
 
@@ -142,11 +148,13 @@ class AssistantSession:
         hub_dir: Path,
         project_root: Path,
         *,
+        pack_name: str = "project-mgmt",
         default_agent: str = "agy",
         codex_model: str | None = None,
     ) -> None:
         self.hub_dir = hub_dir.resolve()
         self.project_root = project_root.resolve()
+        self.pack_name = pack_name
         self.available = detect_available_agents()
         if default_agent in self.available and self.available[default_agent]:
             self.active_agent = default_agent
@@ -189,6 +197,7 @@ class AssistantSession:
             prompt = build_pm_prompt(
                 user_text,
                 self.hub_dir,
+                pack_name=self.pack_name,
                 history=self.messages[:-1],
                 include_history=(chosen == "codex" or not has_prior),
             )
@@ -235,7 +244,11 @@ class AssistantSession:
             self.messages.append(reply_msg)
             if ok:
                 self.turn_count_by_agent[chosen] = self.turn_count_by_agent.get(chosen, 0) + 1
-        return {"ok": ok, "message": reply_msg, "state": build_state_payload(self.hub_dir, session=self)}
+        return {
+            "ok": ok,
+            "message": reply_msg,
+            "state": build_state_payload(self.hub_dir, pack_name=self.pack_name, session=self),
+        }
 
 
 def init_sample_hub(hub_dir: Path) -> None:
@@ -365,7 +378,27 @@ def init_sample_hub(hub_dir: Path) -> None:
         )
 
 
-def build_state_payload(hub_dir: Path, *, session: AssistantSession | None = None) -> dict[str, Any]:
+def build_state_payload(
+    hub_dir: Path,
+    *,
+    pack_name: str = "project-mgmt",
+    session: AssistantSession | None = None,
+) -> dict[str, Any]:
+    assistant_snap = (
+        session.snapshot()
+        if session
+        else {"active_agent": "agy", "available_agents": {}, "busy": False, "messages": []}
+    )
+    hubs = _load_hubs_module()
+    if hubs is not None and pack_name == "academic-research":
+        st = hubs.build_academic_state(hub_dir)
+        st["assistant"] = assistant_snap
+        return st
+    if hubs is not None and pack_name == "exec-secretary-deck":
+        st = hubs.build_secretary_state(hub_dir)
+        st["assistant"] = assistant_snap
+        return st
+
     audit_mod = _load_audit_module()
     audit = audit_mod.audit_project_hub(hub_dir)
 
@@ -384,6 +417,7 @@ def build_state_payload(hub_dir: Path, *, session: AssistantSession | None = Non
     arch_md = (hub_dir / "ARCHITECTURE.md").read_text(encoding="utf-8") if (hub_dir / "ARCHITECTURE.md").is_file() else ""
 
     return {
+        "pack": "project-mgmt",
         "hub_path": str(hub_dir.resolve()),
         "project_name": obj_data.get("project_name") or hub_dir.resolve().parent.name,
         "objectives": obj_data.get("objectives", []),
@@ -392,7 +426,7 @@ def build_state_payload(hub_dir: Path, *, session: AssistantSession | None = Non
         "charter_md": charter_md,
         "architecture_md": arch_md,
         "audit": audit,
-        "assistant": session.snapshot() if session else {"active_agent": "agy", "available_agents": {}, "busy": False, "messages": []},
+        "assistant": assistant_snap,
     }
 
 
@@ -425,6 +459,7 @@ def create_server(
     host: str = "127.0.0.1",
     port: int = 8765,
     *,
+    pack_name: str = "project-mgmt",
     project_root: Path | None = None,
     default_agent: str = "agy",
     codex_model: str | None = None,
@@ -432,7 +467,11 @@ def create_server(
     html_bytes = DASHBOARD_HTML.read_bytes()
     root_dir = (project_root or hub_dir.resolve().parent).resolve()
     session = AssistantSession(
-        hub_dir, root_dir, default_agent=default_agent, codex_model=codex_model
+        hub_dir,
+        root_dir,
+        pack_name=pack_name,
+        default_agent=default_agent,
+        codex_model=codex_model,
     )
 
     class Handler(BaseHTTPRequestHandler):
@@ -463,7 +502,8 @@ def create_server(
                 return
             if path == "/api/state":
                 payload = json.dumps(
-                    build_state_payload(hub_dir, session=session), ensure_ascii=False
+                    build_state_payload(hub_dir, pack_name=pack_name, session=session),
+                    ensure_ascii=False,
                 ).encode("utf-8")
                 self._send(HTTPStatus.OK, "application/json; charset=utf-8", payload)
                 return
@@ -478,6 +518,13 @@ def create_server(
 
             if path == "/api/tasks/update":
                 ok = apply_task_patch(hub_dir, body)
+                status = HTTPStatus.OK if ok else HTTPStatus.NOT_FOUND
+                self._send(status, "application/json", json.dumps({"ok": ok}).encode("utf-8"))
+                return
+
+            if path == "/api/items/update":
+                hubs = _load_hubs_module()
+                ok = hubs.apply_pack_item_patch(pack_name, hub_dir, body) if hubs else False
                 status = HTTPStatus.OK if ok else HTTPStatus.NOT_FOUND
                 self._send(status, "application/json", json.dumps({"ok": ok}).encode("utf-8"))
                 return
@@ -508,9 +555,15 @@ def create_server(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Serve the interactive PM Assistant & live visual workforce dashboard."
+        description="Serve the interactive multi-pack Assistant & live visual dashboard."
     )
-    parser.add_argument("--hub", default="./project-hub", help="Path to project-hub directory.")
+    parser.add_argument(
+        "--pack",
+        choices=["project-mgmt", "academic-research", "exec-secretary-deck"],
+        default="project-mgmt",
+        help="Assistant pack mode (project-mgmt, academic-research, or exec-secretary-deck).",
+    )
+    parser.add_argument("--hub", help="Path to hub directory (default depends on --pack).")
     parser.add_argument("--project-root", default=".", help="Workspace root where agy/claude/codex runs.")
     parser.add_argument(
         "--agent",
@@ -522,33 +575,39 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1).")
     parser.add_argument("--port", type=int, default=8765, help="Bind port (default: 8765).")
     parser.add_argument("--open", action="store_true", help="Open browser automatically on startup.")
-    parser.add_argument("--init-sample", action="store_true", help="Initialize starter project-hub/ if missing.")
+    parser.add_argument("--init-sample", action="store_true", help="Initialize starter hub files if missing.")
     args = parser.parse_args(argv)
 
-    hub_dir = Path(args.hub)
+    hubs = _load_hubs_module()
+    default_dir = hubs.default_hub_dirname(args.pack) if hubs else "project-hub"
+    hub_dir = Path(args.hub) if args.hub else (Path(args.project_root) / default_dir)
     if args.init_sample:
-        init_sample_hub(hub_dir)
+        if hubs:
+            hubs.init_hub_for_pack(args.pack, hub_dir, pm_initializer=init_sample_hub)
+        else:
+            init_sample_hub(hub_dir)
 
     server = create_server(
         hub_dir,
         host=args.host,
         port=args.port,
+        pack_name=args.pack,
         project_root=Path(args.project_root),
         default_agent=args.agent,
         codex_model=args.codex_model,
     )
     actual_port = server.server_address[1]
     url = f"http://{args.host}:{actual_port}"
-    print(f"Interactive PM Assistant ({args.agent}) + Visual Board running at {url}")
+    print(f"Interactive Assistant [{args.pack}] ({args.agent}) + Visual Board running at {url}")
     print(f"  Project root: {Path(args.project_root).resolve()}")
-    print(f"  Project hub:  {hub_dir.resolve()}")
+    print(f"  Workspace hub: {hub_dir.resolve()}")
     print("Press Ctrl+C to stop.")
     if args.open:
         webbrowser.open(url)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nPM Assistant stopped.")
+        print("\nAssistant stopped.")
     finally:
         server.server_close()
     return 0

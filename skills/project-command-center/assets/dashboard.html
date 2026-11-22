@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Project Command Center — 互動式 PM 助手（agy / Claude Code / Codex）</title>
+  <title>Auto-Skills-Fetcher — 互動式 AI 助手指揮中心</title>
   <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js" defer></script>
   <style>
     :root {
@@ -42,9 +42,13 @@
       gap: 10px;
       flex-shrink: 0;
     }
-    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .brand h1 { margin: 0; font-size: 16px; font-weight: 700; }
     .brand .sub { font-size: 11px; color: var(--muted); }
+    .pack-pill {
+      padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700;
+      background: rgba(167, 139, 250, 0.16); color: #c4b5fd; border: 1px solid rgba(167, 139, 250, 0.4);
+    }
     .rag-badge { padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; }
     .rag-GREEN { background: rgba(34, 197, 94, 0.18); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.45); }
     .rag-AMBER { background: rgba(245, 158, 11, 0.18); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.45); }
@@ -57,7 +61,6 @@
     }
     .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
 
-    /* Split-screen workspace: Left Visual Board + Right Interactive Assistant */
     .workspace {
       display: grid;
       grid-template-columns: minmax(0, 1.55fr) minmax(350px, 0.95fr);
@@ -70,128 +73,41 @@
       .workspace { grid-template-columns: 1fr; overflow: visible; }
       .chat-pane { height: 70vh; border-left: none; border-top: 1px solid var(--border); }
     }
-    .board-pane {
-      overflow-y: auto;
-      padding: 16px 20px 40px;
-      min-height: 0;
-    }
-    .chat-pane {
-      display: flex;
-      flex-direction: column;
-      border-left: 1px solid var(--border);
-      background: #0d1424;
-      min-height: 0;
-    }
-    .chat-header {
-      padding: 12px 14px;
-      border-bottom: 1px solid var(--border);
-      background: var(--surface);
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
+    .board-pane { overflow-y: auto; padding: 16px 20px 40px; min-height: 0; }
+    .chat-pane { display: flex; flex-direction: column; border-left: 1px solid var(--border); background: #0d1424; min-height: 0; }
+    .chat-header { padding: 12px 14px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
     .chat-header-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
     .engine-pills { display: flex; gap: 6px; flex-wrap: wrap; }
     .engine-btn {
-      background: var(--bg);
-      color: var(--muted);
-      border: 1px solid var(--border);
-      border-radius: 7px;
-      padding: 5px 10px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
+      background: var(--bg); color: var(--muted); border: 1px solid var(--border);
+      border-radius: 7px; padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer;
     }
     .engine-btn.active { background: rgba(56, 189, 248, 0.16); color: var(--accent); border-color: var(--accent); }
     .engine-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .quick-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--border); background: rgba(17, 24, 39, 0.6); }
-    .chip {
-      background: var(--surface-2); color: #cbd5e1;
-      border: 1px solid var(--border); border-radius: 999px;
-      padding: 4px 10px; font-size: 11px; cursor: pointer;
-    }
+    .chip { background: var(--surface-2); color: #cbd5e1; border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px; font-size: 11px; cursor: pointer; }
     .chip:hover { border-color: var(--accent); color: var(--accent); }
-    .chat-messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .msg {
-      padding: 10px 12px;
-      border-radius: 10px;
-      font-size: 13px;
-      white-space: pre-wrap;
-      word-break: break-word;
-      max-width: 95%;
-    }
-    .msg-user {
-      align-self: flex-end;
-      background: rgba(56, 189, 248, 0.18);
-      border: 1px solid rgba(56, 189, 248, 0.35);
-      color: #e0f2fe;
-    }
-    .msg-assistant {
-      align-self: flex-start;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-    }
+    .chat-messages { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+    .msg { padding: 10px 12px; border-radius: 10px; font-size: 13px; white-space: pre-wrap; word-break: break-word; max-width: 95%; }
+    .msg-user { align-self: flex-end; background: rgba(56, 189, 248, 0.18); border: 1px solid rgba(56, 189, 248, 0.35); color: #e0f2fe; }
+    .msg-assistant { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); color: var(--text); }
     .msg-meta { font-size: 10px; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
-    .chat-input-area {
-      padding: 10px 12px;
-      border-top: 1px solid var(--border);
-      background: var(--surface);
-      display: flex;
-      gap: 8px;
-      align-items: flex-end;
-    }
-    .chat-input-area textarea {
-      flex: 1;
-      background: var(--bg);
-      color: var(--text);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 10px;
-      font-size: 13px;
-      font-family: inherit;
-      resize: none;
-      min-height: 42px;
-      max-height: 120px;
-    }
-    .send-btn {
-      background: var(--accent);
-      color: #082f49;
-      border: none;
-      border-radius: 8px;
-      padding: 10px 14px;
-      font-weight: 700;
-      font-size: 13px;
-      cursor: pointer;
-    }
+    .chat-input-area { padding: 10px 12px; border-top: 1px solid var(--border); background: var(--surface); display: flex; gap: 8px; align-items: flex-end; }
+    .chat-input-area textarea { flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 13px; font-family: inherit; resize: none; min-height: 42px; max-height: 120px; }
+    .send-btn { background: var(--accent); color: #082f49; border: none; border-radius: 8px; padding: 10px 14px; font-weight: 700; font-size: 13px; cursor: pointer; }
     .send-btn:disabled { opacity: 0.5; cursor: wait; }
 
-    /* Visual Board styles */
     .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
     .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 11px 13px; }
     .kpi .label { font-size: 11px; color: var(--muted); }
     .kpi .value { font-size: 22px; font-weight: 700; }
     .kpi .hint { font-size: 11px; color: var(--muted); }
     .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
-    .tab-btn {
-      background: var(--surface); color: var(--muted);
-      border: 1px solid var(--border); border-radius: 7px;
-      padding: 6px 11px; font-size: 12px; font-weight: 600; cursor: pointer;
-    }
+    .tab-btn { background: var(--surface); color: var(--muted); border: 1px solid var(--border); border-radius: 7px; padding: 6px 11px; font-size: 12px; font-weight: 600; cursor: pointer; }
     .tab-btn.active { background: rgba(56, 189, 248, 0.15); color: var(--accent); border-color: var(--accent); }
     .panel { display: none; }
     .panel.active { display: block; }
-    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 12px; }
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
     .card h2 { margin: 0 0 10px; font-size: 14px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
     .bar-track { width: 100%; height: 9px; background: var(--surface-2); border-radius: 999px; overflow: hidden; margin: 6px 0; }
@@ -201,11 +117,11 @@
     .fill-red { background: linear-gradient(90deg, #dc2626, #f87171); }
     .fill-blue { background: linear-gradient(90deg, #0284c7, #38bdf8); }
     .tag { display: inline-block; padding: 2px 7px; border-radius: 5px; font-size: 11px; font-weight: 600; margin-right: 4px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
-    .st-done, .st-passed { background: rgba(34, 197, 94, 0.15); color: #4ade80; border-color: rgba(34, 197, 94, 0.35); }
-    .st-in_progress { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border-color: rgba(56, 189, 248, 0.35); }
-    .st-in_review { background: rgba(167, 139, 250, 0.15); color: #c4b5fd; border-color: rgba(167, 139, 250, 0.35); }
-    .st-blocked, .st-needs_rework, .st-failed { background: rgba(239, 68, 68, 0.18); color: #f87171; border-color: rgba(239, 68, 68, 0.4); }
-    .st-todo, .st-pending { background: rgba(148, 163, 184, 0.14); color: #cbd5e1; border-color: rgba(148, 163, 184, 0.3); }
+    .st-done, .st-passed, .st-ready, .st-included, .st-sent { background: rgba(34, 197, 94, 0.15); color: #4ade80; border-color: rgba(34, 197, 94, 0.35); }
+    .st-in_progress, .st-running, .st-drafting, .st-screened { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border-color: rgba(56, 189, 248, 0.35); }
+    .st-in_review, .st-visual_qa, .st-awaiting_approval, .st-warning { background: rgba(245, 158, 11, 0.16); color: #fbbf24; border-color: rgba(245, 158, 11, 0.4); }
+    .st-blocked, .st-needs_rework, .st-failed, .st-excluded, .st-P0 { background: rgba(239, 68, 68, 0.18); color: #f87171; border-color: rgba(239, 68, 68, 0.4); }
+    .st-todo, .st-pending, .st-draft, .st-outline, .st-crawled, .st-P1 { background: rgba(148, 163, 184, 0.14); color: #cbd5e1; border-color: rgba(148, 163, 184, 0.3); }
     .member-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
     .member-card.overload { border-color: rgba(239, 68, 68, 0.65); }
     .member-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
@@ -224,7 +140,7 @@
     .gantt-track { position: relative; height: 20px; background: var(--surface-2); border-radius: 5px; overflow: hidden; }
     .gantt-bar { position: absolute; top: 3px; height: 14px; border-radius: 3px; font-size: 10px; padding: 0 5px; line-height: 14px; color: #fff; white-space: nowrap; overflow: hidden; }
     .gantt-today { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--red); z-index: 2; }
-    pre.doc-box { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 12px; color: #cbd5e1; max-height: 420px; overflow: auto; }
+    pre.doc-box { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 12px; color: #cbd5e1; max-height: 440px; overflow: auto; }
     .mermaid-wrap { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow: auto; margin-bottom: 10px; }
     .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
   </style>
@@ -233,9 +149,10 @@
   <header>
     <div class="brand">
       <div>
-        <h1 id="project-title">Project Command Center</h1>
-        <div class="sub" id="hub-path">Loading project-hub...</div>
+        <h1 id="project-title">Interactive Assistant</h1>
+        <div class="sub" id="hub-path">Loading workspace...</div>
       </div>
+      <span id="pack-pill" class="pack-pill">project-mgmt</span>
       <span id="rag-badge" class="rag-badge rag-GREEN">GREEN</span>
     </div>
     <div style="display:flex; gap:8px; align-items:center;">
@@ -245,101 +162,38 @@
   </header>
 
   <div class="workspace">
-    <!-- LEFT: LIVE VISUAL BOARD -->
+    <!-- LEFT: DYNAMIC VISUAL BOARD (ADAPTS TO PM / ACADEMIC / SECRETARY PACK) -->
     <div class="board-pane">
       <section class="kpi-grid" id="kpi-grid"></section>
-
-      <div class="tabs">
-        <button class="tab-btn active" data-tab="workforce" onclick="switchTab('workforce')">👥 人力分配與負荷</button>
-        <button class="tab-btn" data-tab="objectives" onclick="switchTab('objectives')">🎯 目標↔任務與時間軸</button>
-        <button class="tab-btn" data-tab="qa" onclick="switchTab('qa')">✅ 品質硬閘門與風險</button>
-        <button class="tab-btn" data-tab="arch" onclick="switchTab('arch')">🗺️ 架構圖與計劃書</button>
-      </div>
-
-      <section id="panel-workforce" class="panel active">
-        <div class="filters">
-          <label style="font-size:11px;color:var(--muted)">目標：<select id="filter-obj" onchange="renderAll()"><option value="">全部</option></select></label>
-          <label style="font-size:11px;color:var(--muted)">狀態：
-            <select id="filter-status" onchange="renderAll()">
-              <option value="">全部</option>
-              <option value="todo">todo</option><option value="in_progress">in_progress</option>
-              <option value="blocked">blocked</option><option value="in_review">in_review</option>
-              <option value="needs_rework">needs_rework</option><option value="done">done</option>
-            </select>
-          </label>
-        </div>
-        <div id="workforce-alerts"></div>
-        <div class="grid-2" id="workforce-grid"></div>
-        <div class="card" id="unassigned-card" style="display:none;margin-top:12px;">
-          <h2>⚠️ 未指派任務</h2>
-          <div id="unassigned-list"></div>
-        </div>
-      </section>
-
-      <section id="panel-objectives" class="panel">
-        <div id="objectives-list"></div>
-        <div class="card">
-          <h2>📅 任務時間軸（紅線 = 今日）</h2>
-          <div id="gantt-container"></div>
-        </div>
-      </section>
-
-      <section id="panel-qa" class="panel">
-        <div class="card"><h2>🚨 健康度與品質稽核警訊</h2><div id="audit-alerts"></div></div>
-        <div class="card">
-          <h2>📋 產出品質檢核表（Acceptance Criteria & Evidence）</h2>
-          <div style="overflow:auto;">
-            <table>
-              <thead><tr><th>任務</th><th>目標</th><th>負責人</th><th>狀態/QA</th><th>驗收標準</th><th>驗證證據</th></tr></thead>
-              <tbody id="qa-table-body"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <section id="panel-arch" class="panel">
-        <div class="card">
-          <h2>🗺️ 完整架構圖（ARCHITECTURE.md）</h2>
-          <div id="mermaid-container"></div>
-          <pre class="doc-box" id="arch-doc"></pre>
-        </div>
-        <div class="card">
-          <h2>📑 專案計劃書（CHARTER.md）</h2>
-          <pre class="doc-box" id="charter-doc"></pre>
-        </div>
-      </section>
+      <div class="tabs" id="tabs-bar"></div>
+      <div id="board-panels"></div>
     </div>
 
-    <!-- RIGHT: INTERACTIVE AI PM ASSISTANT POWERED BY AGY / CLAUDE CODE / CODEX -->
+    <!-- RIGHT: INTERACTIVE AI ASSISTANT POWERED BY AGY / CLAUDE CODE / CODEX -->
     <aside class="chat-pane">
       <div class="chat-header">
         <div class="chat-header-top">
-          <strong style="font-size:14px;">🤖 互動式 PM 助手</strong>
+          <strong style="font-size:14px;" id="assistant-title">🤖 互動式 AI 助手</strong>
           <button class="tab-btn" style="padding:3px 8px;font-size:11px;" onclick="resetChat()">新對話</button>
         </div>
-        <div class="engine-pills" id="engine-pills">
+        <div class="engine-pills">
           <button class="engine-btn" data-agent="agy" onclick="selectAgent('agy')">⚡ Antigravity (agy)</button>
           <button class="engine-btn" data-agent="claude" onclick="selectAgent('claude')">🟣 Claude Code</button>
           <button class="engine-btn" data-agent="codex" onclick="selectAgent('codex')">🟢 Codex</button>
         </div>
       </div>
 
-      <div class="quick-chips">
-        <button class="chip" onclick="quickAsk('請根據 project-hub/ 健檢目前專案方向、時間進度、架構圖與計劃書，列出紅黃綠燈風險與建議。')">🔍 健檢進度與方向</button>
-        <button class="chip" onclick="quickAsk('請分析目前每位成員的工作負荷與每週產能，找出超載或閒置人力並提出具體改派方案；若明顯超載請直接調整 tasks.yaml 平衡人力。')">⚖️ 平衡人力負荷</button>
-        <button class="chip" onclick="quickAsk('請執行產出品質硬閘門審查，檢查所有任務的 acceptance_criteria、qa_status 與 evidence 是否達標。')">✅ 審查產出品質</button>
-        <button class="chip" onclick="quickAsk('請核對 ARCHITECTURE.md 架構模組與 objectives.yaml 目標，確認是否有缺少任務或架構偏移。')">🗺️ 核對架構與目標</button>
-      </div>
+      <div class="quick-chips" id="quick-chips"></div>
 
       <div class="chat-messages" id="chat-messages">
         <div class="msg msg-assistant">
           <div class="msg-meta">系統提示</div>
-          已連接本機 CLI 引擎！你可以在上方切換 <strong>Antigravity (agy)</strong>、<strong>Claude Code</strong> 或 <strong>Codex</strong>，直接對助手下達任務派發、人力平衡、時程檢查或品質驗收指令；助手修改 <code>project-hub/</code> 後，左側視覺化看板會即時更新。
+          已連接本機 CLI 引擎！可隨時切換 <strong>Antigravity (agy)</strong>、<strong>Claude Code</strong> 或 <strong>Codex</strong> 下指令，助手更新工作區檔案後，左側視覺化看板會即時刷新。
         </div>
       </div>
 
       <div class="chat-input-area">
-        <textarea id="chat-input" placeholder="直接對 PM 助手下指令（Enter 送出，Shift+Enter 換行）..." onkeydown="handleChatKey(event)"></textarea>
+        <textarea id="chat-input" placeholder="直接對助手下指令（Enter 送出，Shift+Enter 換行）..." onkeydown="handleChatKey(event)"></textarea>
         <button class="send-btn" id="send-btn" onclick="sendChat()">送出</button>
       </div>
     </aside>
@@ -348,18 +202,69 @@
   <script>
     let STATE = null;
     let ACTIVE_AGENT = 'agy';
+    let ACTIVE_TAB = null;
     let SENDING = false;
-    let LAST_ARCH_HASH = '';
+    let LAST_PACK = '';
+    let LAST_MERMAID_SRC = '';
     let LAST_MSG_COUNT = -1;
 
+    const PACK_CONFIG = {
+      'project-mgmt': {
+        label: '📋 專案管理助手',
+        tabs: [
+          { id: 't1', label: '👥 人力分配與負荷' },
+          { id: 't2', label: '🎯 目標↔任務與時間軸' },
+          { id: 't3', label: '✅ 品質硬閘門與風險' },
+          { id: 't4', label: '🗺️ 架構圖與計劃書' }
+        ],
+        chips: [
+          { label: '🔍 健檢進度與方向', prompt: '請根據 project-hub/ 健檢目前專案方向、時間進度、架構圖與計劃書，列出紅黃綠燈風險與處置建議。' },
+          { label: '⚖️ 平衡人力負荷', prompt: '請分析每位成員的工作負荷與每週產能，找出超載或閒置人力並提出具體改派方案；必要時直接調整 tasks.yaml。' },
+          { label: '✅ 審查產出品質', prompt: '請執行產出品質硬閘門審查，檢查所有任務的 acceptance_criteria、qa_status 與 evidence 是否達標。' },
+          { label: '🗺️ 核對架構與目標', prompt: '請核對 ARCHITECTURE.md 架構模組與 objectives.yaml 目標，確認是否有遺漏任務或架構偏移。' }
+        ]
+      },
+      'academic-research': {
+        label: '🎓 學術研究助手',
+        tabs: [
+          { id: 't1', label: '📈 研究進度與實驗測試' },
+          { id: 't2', label: '📚 論文庫與文獻爬取' },
+          { id: 't3', label: '🛡️ 學術倫理與引文稽核' },
+          { id: 't4', label: '📝 研究計劃書與流程圖' }
+        ],
+        chips: [
+          { label: '📈 健檢研究進度', prompt: '請根據 research-hub/ 盤點目前各研究階段里程碑、實驗進度與逾期風險，並建議下一步行動。' },
+          { label: '📥 整理／擴充文獻庫', prompt: '請檢查 papers.yaml 目前收錄與篩選狀態，指出尚未完成 DOI/arXiv 查核的論文並整理 PRISMA 文獻缺口。' },
+          { label: '🧪 分析實驗與基準測試', prompt: '請分析 experiments.yaml 的基準測試數據、vs Baseline 提升幅度與可重現性設定，建議下一組消融或對照實驗。' },
+          { label: '🛡️ 檢查學術倫理與引文', prompt: '請依據 ethics_audit.yaml 執行學術倫理、原創性/抄襲風險、資料爬取合規與引文真實性稽核。' }
+        ]
+      },
+      'exec-secretary-deck': {
+        label: '🗂️ 個人秘書與簡報助手',
+        tabs: [
+          { id: 't1', label: '📅 今日行程與會議待辦' },
+          { id: 't2', label: '📊 簡報與視覺交付物' },
+          { id: 't3', label: '✉️ 溝通草稿與外寄審批' },
+          { id: 't4', label: '📰 主管簡報與決策備忘' }
+        ],
+        chips: [
+          { label: '📅 整理今日行程與待辦', prompt: '請根據 secretary-hub/ 整理近期重要會議行程、準備狀態與 P0/P1 待辦追蹤清單。' },
+          { label: '📊 檢核簡報進度與架構', prompt: '請檢視 decks.yaml 中每份簡報的截止日、目標受眾、投影片架構與視覺檢核備註，給出優化建議。' },
+          { label: '📝 彙整會議紀要追蹤', prompt: '請檢查 action_items.yaml 尚未完成與即將到期的會議待辦，整理跟催提醒清單。' },
+          { label: '✉️ 起草／檢核外寄草稿', prompt: '請檢視 comms_drafts.yaml 待審批的外寄信件與內部公告草稿，優化措辭並維持 awaiting_approval 等待我確認。' }
+        ]
+      }
+    };
+
     function esc(s) {
-      return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+      return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':"&quot;","'":'&#39;' }[c]));
     }
 
-    function switchTab(name) {
-      document.querySelectorAll('.tab-btn[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
-      document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
-      if (name === 'arch') renderMermaid();
+    function switchTab(id) {
+      ACTIVE_TAB = id;
+      document.querySelectorAll('.tab-btn[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === id));
+      document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + id));
+      if (id === 't4') renderMermaid();
     }
 
     function selectAgent(agent) {
@@ -368,10 +273,7 @@
     }
 
     function handleChatKey(e) {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendChat();
-      }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
     }
 
     function quickAsk(text) {
@@ -390,17 +292,15 @@
       const input = document.getElementById('chat-input');
       const text = input.value.trim();
       if (!text) return;
-
       SENDING = true;
       input.value = '';
       const btn = document.getElementById('send-btn');
-      btn.disabled = true;
-      btn.textContent = '思考中...';
+      btn.disabled = true; btn.textContent = '思考中...';
 
       const box = document.getElementById('chat-messages');
       box.insertAdjacentHTML('beforeend', `
         <div class="msg msg-user"><div class="msg-meta">你 -> ${esc(ACTIVE_AGENT)}</div>${esc(text)}</div>
-        <div class="msg msg-assistant" id="pending-msg"><div class="msg-meta">🤖 ${esc(ACTIVE_AGENT)} 執行中...</div>正在讀取 project-hub/ 並執行分析與調整，請稍候...</div>
+        <div class="msg msg-assistant" id="pending-msg"><div class="msg-meta">🤖 ${esc(ACTIVE_AGENT)} 執行中...</div>正在分析工作區並處理你的指示，請稍候...</div>
       `);
       box.scrollTop = box.scrollHeight;
 
@@ -427,17 +327,22 @@
         const pending = document.getElementById('pending-msg');
         if (pending) pending.textContent = '請求失敗: ' + err.message;
       } finally {
-        SENDING = false;
-        btn.disabled = false;
-        btn.textContent = '送出';
+        SENDING = false; btn.disabled = false; btn.textContent = '送出';
       }
     }
 
     async function updateTaskField(taskId, patch) {
       const res = await fetch('/api/tasks/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task_id: taskId, ...patch })
+      });
+      if (res.ok) await refreshState(true);
+    }
+
+    async function updatePackItem(kind, id, patch) {
+      const res = await fetch('/api/items/update', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind, id, ...patch })
       });
       if (res.ok) await refreshState(true);
     }
@@ -453,18 +358,36 @@
       }
     }
 
+    function initChromeForPack(pack) {
+      const cfg = PACK_CONFIG[pack] || PACK_CONFIG['project-mgmt'];
+      document.getElementById('pack-pill').textContent = pack;
+      document.getElementById('assistant-title').textContent = cfg.label;
+      document.getElementById('tabs-bar').innerHTML = cfg.tabs.map((t, i) =>
+        `<button class="tab-btn ${i === 0 ? 'active' : ''}" data-tab="${t.id}" onclick="switchTab('${t.id}')">${esc(t.label)}</button>`
+      ).join('');
+      document.getElementById('quick-chips').innerHTML = cfg.chips.map((c, idx) =>
+        `<button class="chip" data-chip-idx="${idx}">${esc(c.label)}</button>`
+      ).join('');
+      document.querySelectorAll('#quick-chips .chip').forEach(btn => {
+        btn.addEventListener('click', () => quickAsk(cfg.chips[Number(btn.dataset.chipIdx)].prompt));
+      });
+      document.getElementById('board-panels').innerHTML = cfg.tabs.map((t, i) =>
+        `<section id="panel-${t.id}" class="panel ${i === 0 ? 'active' : ''}"></section>`
+      ).join('');
+      ACTIVE_TAB = 't1';
+    }
+
     function renderAll(force = false) {
       if (!STATE) return;
-      const audit = STATE.audit || {};
-      const tasks = STATE.tasks || [];
-      const objectives = STATE.objectives || [];
-      const members = STATE.team || [];
-      const assistant = STATE.assistant || {};
-
-      // Sync available engines
-      if (assistant.active_agent && LAST_MSG_COUNT === -1) {
-        ACTIVE_AGENT = assistant.active_agent;
+      const pack = STATE.pack || 'project-mgmt';
+      if (pack !== LAST_PACK) {
+        LAST_PACK = pack;
+        initChromeForPack(pack);
       }
+
+      const audit = STATE.audit || {};
+      const assistant = STATE.assistant || {};
+      if (assistant.active_agent && LAST_MSG_COUNT === -1) ACTIVE_AGENT = assistant.active_agent;
       const avail = assistant.available_agents || {};
       document.querySelectorAll('.engine-btn').forEach(b => {
         const ag = b.dataset.agent;
@@ -472,7 +395,6 @@
         b.classList.toggle('active', ag === ACTIVE_AGENT);
       });
 
-      // Render chat messages when changed (and not mid-send)
       const msgs = assistant.messages || [];
       if (!SENDING && msgs.length !== LAST_MSG_COUNT) {
         LAST_MSG_COUNT = msgs.length;
@@ -488,25 +410,36 @@
         }
       }
 
-      document.getElementById('project-title').textContent = STATE.project_name || 'Project Command Center';
+      document.getElementById('project-title').textContent = STATE.project_name || pack;
       document.getElementById('hub-path').textContent = 'Hub: ' + (STATE.hub_path || '') + ' | 基準日: ' + (audit.as_of || '');
       const rag = audit.rag_status || 'GREEN';
       const badge = document.getElementById('rag-badge');
       badge.textContent = 'RAG: ' + rag;
       badge.className = 'rag-badge rag-' + rag;
 
-      const objSel = document.getElementById('filter-obj');
-      const curObj = objSel.value;
-      objSel.innerHTML = '<option value="">全部</option>' + objectives.map(o => `<option value="${esc(o.id)}">${esc(o.id)} — ${esc(o.title)}</option>`).join('');
-      objSel.value = curObj;
+      if (pack === 'academic-research') renderAcademicBoard(force);
+      else if (pack === 'exec-secretary-deck') renderSecretaryBoard(force);
+      else renderPMBoard(force);
+    }
 
+    function renderAlertsHtml(audit) {
+      const reds = (audit.red_issues || []).map(x => `<div class="alert alert-red">🚨 ${esc(x)}</div>`);
+      const ambers = (audit.amber_issues || []).map(x => `<div class="alert alert-amber">⚠️ ${esc(x)}</div>`);
+      return (reds.length || ambers.length) ? reds.concat(ambers).join('') : '<div class="alert alert-green">✅ 目前所有檢核項目全數通過！</div>';
+    }
+
+    /* ==================== 1. PROJECT-MGMT VIEW ==================== */
+    function renderPMBoard(force) {
+      const audit = STATE.audit || {};
+      const tasks = STATE.tasks || [];
+      const objectives = STATE.objectives || [];
+      const members = STATE.team || [];
       const verifiedDone = tasks.filter(t => t.status === 'done' && t.qa_status === 'passed').length;
       const activeOpen = tasks.filter(t => t.status !== 'done').length;
       const redCount = (audit.red_issues || []).length;
       const amberCount = (audit.amber_issues || []).length;
       const maxUtil = (audit.workload || []).reduce((m, w) => Math.max(m, w.utilization_pct || 0), 0);
-      const avgObjPct = (audit.objectives || []).length
-        ? Math.round((audit.objectives || []).reduce((s, o) => s + (o.completion_pct || 0), 0) / audit.objectives.length) : 0;
+      const avgObjPct = (audit.objectives || []).length ? Math.round((audit.objectives || []).reduce((s, o) => s + (o.completion_pct || 0), 0) / audit.objectives.length) : 0;
 
       document.getElementById('kpi-grid').innerHTML = `
         <div class="kpi"><div class="label">目標總達成率</div><div class="value" style="color:var(--accent)">${avgObjPct}%</div><div class="hint">${objectives.length} 個目標</div></div>
@@ -515,32 +448,14 @@
         <div class="kpi"><div class="label">紅燈 / 黃燈</div><div class="value" style="color:${redCount ? 'var(--red)' : 'var(--green)'}">${redCount} <span style="font-size:14px;color:var(--amber)">/ ${amberCount}</span></div><div class="hint">方向/時程/品質</div></div>
       `;
 
-      renderWorkforce(members, tasks, audit);
-      renderObjectivesAndGantt(objectives, tasks, audit);
-      renderQA(tasks, audit);
-      renderDocs(force);
-    }
-
-    function renderWorkforce(members, tasks, audit) {
-      const fObj = document.getElementById('filter-obj').value;
-      const fStatus = document.getElementById('filter-status').value;
-      const filtered = tasks.filter(t => (!fObj || t.objective_id === fObj) && (!fStatus || t.status === fStatus));
       const wlMap = Object.fromEntries((audit.workload || []).map(w => [w.member, w]));
       const memberIds = members.map(m => m.id);
       const statuses = ['todo', 'in_progress', 'blocked', 'in_review', 'needs_rework', 'done'];
-
-      const overloadAlerts = (audit.amber_issues || []).filter(x => x.includes('[OVERLOAD]') || x.includes('[UNASSIGNED]'));
-      document.getElementById('workforce-alerts').innerHTML = overloadAlerts.map(a => `<div class="alert alert-amber">${esc(a)}</div>`).join('');
-
       const taskCard = (t) => `
         <div class="task-row">
           <div class="task-top">
             <strong style="font-size:12px;">${esc(t.id)} · ${esc(t.title)}</strong>
-            <div>
-              <span class="tag">${esc(t.objective_id || '無目標')}</span>
-              <span class="tag">${esc(t.estimated_hours || 0)}h</span>
-              <span class="tag st-${esc(t.status || 'todo')}">${esc(t.status || 'todo')}</span>
-            </div>
+            <div><span class="tag">${esc(t.objective_id || '無目標')}</span><span class="tag">${esc(t.estimated_hours || 0)}h</span><span class="tag st-${esc(t.status || 'todo')}">${esc(t.status || 'todo')}</span></div>
           </div>
           <div class="task-controls">
             <span style="font-size:11px;color:var(--muted)">截止: ${esc(t.due_date || '-')}</span>
@@ -552,99 +467,223 @@
               ${statuses.map(st => `<option value="${st}" ${t.status === st ? 'selected' : ''}>${st}</option>`).join('')}
             </select>
           </div>
-        </div>
+        </div>`;
+
+      const overloadAlerts = (audit.amber_issues || []).filter(x => x.includes('[OVERLOAD]') || x.includes('[UNASSIGNED]')).map(a => `<div class="alert alert-amber">${esc(a)}</div>`).join('');
+      const unassigned = tasks.filter(t => !t.assignee || !memberIds.includes(t.assignee));
+      document.getElementById('panel-t1').innerHTML = `
+        ${overloadAlerts}
+        <div class="grid-2">${members.map(m => {
+          const wl = wlMap[m.id] || { open_hours: 0, weekly_capacity: m.weekly_capacity_hours || 40, utilization_pct: 0 };
+          const util = wl.utilization_pct || 0;
+          const fillClass = util > 100 ? 'fill-red' : (util >= 80 ? 'fill-amber' : 'fill-green');
+          const mTasks = tasks.filter(t => t.assignee === m.id);
+          return `<div class="member-card ${util > 100 ? 'overload' : ''}">
+            <div class="member-head"><div><div style="font-weight:700;font-size:14px;">${esc(m.name || m.id)}</div><div style="font-size:11px;color:var(--muted)">${esc(m.role || '')}</div></div>
+            <div style="text-align:right;"><div style="font-size:16px;font-weight:700;color:${util > 100 ? 'var(--red)' : (util >= 80 ? 'var(--amber)' : 'var(--green)')}">${util}%</div><div style="font-size:10px;color:var(--muted)">${wl.open_hours}h / ${wl.weekly_capacity}h</div></div></div>
+            <div class="bar-track"><div class="bar-fill ${fillClass}" style="width:${Math.min(100, util)}%"></div></div>
+            <div>${mTasks.length ? mTasks.map(taskCard).join('') : '<div style="font-size:11px;color:var(--muted);padding:6px 0;">目前無指派任務</div>'}</div>
+          </div>`;
+        }).join('')}</div>
+        ${unassigned.length ? `<div class="card" style="margin-top:12px;"><h2>⚠️ 未指派任務</h2>${unassigned.map(taskCard).join('')}</div>` : ''}
       `;
 
-      document.getElementById('workforce-grid').innerHTML = members.map(m => {
-        const wl = wlMap[m.id] || { open_hours: 0, weekly_capacity: m.weekly_capacity_hours || 40, utilization_pct: 0 };
-        const util = wl.utilization_pct || 0;
-        const fillClass = util > 100 ? 'fill-red' : (util >= 80 ? 'fill-amber' : 'fill-green');
-        const mTasks = filtered.filter(t => t.assignee === m.id);
-        return `
-          <div class="member-card ${util > 100 ? 'overload' : ''}">
-            <div class="member-head">
-              <div>
-                <div style="font-weight:700;font-size:14px;">${esc(m.name || m.id)}</div>
-                <div style="font-size:11px;color:var(--muted)">${esc(m.role || '')}</div>
-              </div>
-              <div style="text-align:right;">
-                <div style="font-size:16px;font-weight:700;color:${util > 100 ? 'var(--red)' : (util >= 80 ? 'var(--amber)' : 'var(--green)')}">${util}%</div>
-                <div style="font-size:10px;color:var(--muted)">${wl.open_hours}h / ${wl.weekly_capacity}h</div>
-              </div>
-            </div>
-            <div class="bar-track"><div class="bar-fill ${fillClass}" style="width:${Math.min(100, util)}%"></div></div>
-            <div>${mTasks.length ? mTasks.map(taskCard).join('') : '<div style="font-size:11px;color:var(--muted);padding:6px 0;">無符合條件之任務</div>'}</div>
-          </div>
-        `;
-      }).join('');
-
-      const unassigned = filtered.filter(t => !t.assignee || !memberIds.includes(t.assignee));
-      const uCard = document.getElementById('unassigned-card');
-      uCard.style.display = unassigned.length ? 'block' : 'none';
-      document.getElementById('unassigned-list').innerHTML = unassigned.map(taskCard).join('');
-    }
-
-    function renderObjectivesAndGantt(objectives, tasks, audit) {
       const objAudit = Object.fromEntries((audit.objectives || []).map(o => [o.id, o]));
-      document.getElementById('objectives-list').innerHTML = objectives.map(o => {
-        const oa = objAudit[o.id] || { completion_pct: 0, verified_done_tasks: 0, total_tasks: 0 };
-        const linked = tasks.filter(t => t.objective_id === o.id);
-        return `
-          <div class="card">
-            <h2><span>${esc(o.id)} — ${esc(o.title)}</span><span class="tag">${esc(o.target_date || '-')} · ${oa.verified_done_tasks}/${oa.total_tasks} (${oa.completion_pct}%)</span></h2>
-            <div class="bar-track"><div class="bar-fill fill-blue" style="width:${oa.completion_pct}%"></div></div>
-            ${linked.length ? `<table><thead><tr><th>ID</th><th>任務</th><th>負責人</th><th>截止</th><th>工時</th><th>狀態</th></tr></thead><tbody>${linked.map(t => `<tr><td><strong>${esc(t.id)}</strong></td><td>${esc(t.title)}</td><td>${esc(t.assignee || '-')}</td><td>${esc(t.due_date || '-')}</td><td>${esc(t.estimated_hours || 0)}h</td><td><span class="tag st-${esc(t.status)}">${esc(t.status)}</span></td></tr>`).join('')}</tbody></table>` : '<div class="alert alert-amber">此目標尚未派發任務</div>'}
-          </div>
-        `;
-      }).join('');
-
       const todayMs = new Date((audit.as_of || new Date().toISOString().slice(0, 10)) + 'T00:00:00').getTime();
       const dated = tasks.filter(t => t.due_date).map(t => ({ ...t, dueMs: new Date(t.due_date + 'T00:00:00').getTime() }));
-      if (!dated.length) return;
-      const minMs = Math.min(todayMs - 5 * 86400000, ...dated.map(d => d.dueMs - 7 * 86400000));
-      const maxMs = Math.max(todayMs + 14 * 86400000, ...dated.map(d => d.dueMs + 3 * 86400000));
-      const span = Math.max(86400000, maxMs - minMs);
-      const todayPct = ((todayMs - minMs) / span) * 100;
+      let ganttHtml = '<div style="color:var(--muted);font-size:12px;">尚無具截止日任務</div>';
+      if (dated.length) {
+        const minMs = Math.min(todayMs - 5 * 86400000, ...dated.map(d => d.dueMs - 7 * 86400000));
+        const maxMs = Math.max(todayMs + 14 * 86400000, ...dated.map(d => d.dueMs + 3 * 86400000));
+        const span = Math.max(86400000, maxMs - minMs);
+        const todayPct = ((todayMs - minMs) / span) * 100;
+        ganttHtml = dated.sort((a, b) => a.dueMs - b.dueMs).map(t => {
+          const endPct = Math.min(99, Math.max(4, ((t.dueMs - minMs) / span) * 100));
+          const startPct = Math.max(0, endPct - (Math.max(2, Math.ceil((t.estimated_hours || 8) / 6)) * 86400000 / span) * 100);
+          const overdue = t.status !== 'done' && t.dueMs < todayMs;
+          const bg = t.status === 'done' ? '#16a34a' : (overdue ? '#dc2626' : '#0284c7');
+          return `<div class="gantt-row"><div><strong>${esc(t.id)}</strong> ${esc(t.title)}</div><div class="gantt-track"><div class="gantt-today" style="left:${todayPct}%"></div><div class="gantt-bar" style="left:${startPct}%;width:${Math.max(3, endPct - startPct)}%;background:${bg};">${esc(t.status)}</div></div><div style="text-align:right;color:${overdue ? 'var(--red)' : 'var(--muted)'}">${esc(t.due_date)}</div></div>`;
+        }).join('');
+      }
+      document.getElementById('panel-t2').innerHTML = objectives.map(o => {
+        const oa = objAudit[o.id] || { completion_pct: 0, verified_done_tasks: 0, total_tasks: 0 };
+        const linked = tasks.filter(t => t.objective_id === o.id);
+        return `<div class="card"><h2><span>${esc(o.id)} — ${esc(o.title)}</span><span class="tag">${esc(o.target_date || '-')} · ${oa.verified_done_tasks}/${oa.total_tasks} (${oa.completion_pct}%)</span></h2>
+          <div class="bar-track"><div class="bar-fill fill-blue" style="width:${oa.completion_pct}%"></div></div>
+          ${linked.length ? `<table><thead><tr><th>ID</th><th>任務</th><th>負責人</th><th>截止</th><th>工時</th><th>狀態</th></tr></thead><tbody>${linked.map(t => `<tr><td><strong>${esc(t.id)}</strong></td><td>${esc(t.title)}</td><td>${esc(t.assignee || '-')}</td><td>${esc(t.due_date || '-')}</td><td>${esc(t.estimated_hours || 0)}h</td><td><span class="tag st-${esc(t.status)}">${esc(t.status)}</span></td></tr>`).join('')}</tbody></table>` : '<div class="alert alert-amber">此目標尚未派發任務</div>'}</div>`;
+      }).join('') + `<div class="card"><h2>📅 任務時間軸（紅線 = 今日）</h2>${ganttHtml}</div>`;
 
-      document.getElementById('gantt-container').innerHTML = dated.sort((a, b) => a.dueMs - b.dueMs).map(t => {
-        const endPct = Math.min(99, Math.max(4, ((t.dueMs - minMs) / span) * 100));
-        const durDays = Math.max(2, Math.ceil((t.estimated_hours || 8) / 6));
-        const startPct = Math.max(0, endPct - (durDays * 86400000 / span) * 100);
-        const overdue = t.status !== 'done' && t.dueMs < todayMs;
-        const bg = t.status === 'done' ? '#16a34a' : (overdue ? '#dc2626' : '#0284c7');
-        return `<div class="gantt-row"><div><strong>${esc(t.id)}</strong> ${esc(t.title)}</div><div class="gantt-track"><div class="gantt-today" style="left:${todayPct}%"></div><div class="gantt-bar" style="left:${startPct}%;width:${Math.max(3, endPct - startPct)}%;background:${bg};">${esc(t.status)}</div></div><div style="text-align:right;color:${overdue ? 'var(--red)' : 'var(--muted)'}">${esc(t.due_date)}</div></div>`;
-      }).join('');
+      document.getElementById('panel-t3').innerHTML = `
+        <div class="card"><h2>🚨 健康度與品質稽核警訊</h2>${renderAlertsHtml(audit)}</div>
+        <div class="card"><h2>📋 產出品質檢核表</h2><div style="overflow:auto;"><table><thead><tr><th>任務</th><th>目標</th><th>負責人</th><th>狀態/QA</th><th>驗收標準</th><th>驗證證據</th></tr></thead><tbody>
+          ${tasks.map(t => `<tr><td><strong>${esc(t.id)}</strong><br/>${esc(t.title)}</td><td><span class="tag">${esc(t.objective_id || '-')}</span></td><td>${esc(t.assignee || '-')}</td><td><span class="tag st-${esc(t.status)}">${esc(t.status)}</span><br/><span class="tag st-${esc(t.qa_status)}">QA:${esc(t.qa_status)}</span></td><td>${(t.acceptance_criteria || []).map(c => `<div>${c.passed ? '✅' : '⬜'} ${esc(c.criterion)}</div>`).join('') || '-'}</td><td>${(t.evidence || []).map(e => `<div>• ${esc(e)}</div>`).join('') || '-'}</td></tr>`).join('')}
+        </tbody></table></div></div>`;
+
+      renderMermaidDocPanel(STATE.architecture_md || '', STATE.charter_md || '', '🗺️ 完整架構圖（ARCHITECTURE.md）', '📑 專案計劃書（CHARTER.md）', force);
     }
 
-    function renderQA(tasks, audit) {
-      const reds = (audit.red_issues || []).map(x => `<div class="alert alert-red">🚨 ${esc(x)}</div>`);
-      const ambers = (audit.amber_issues || []).map(x => `<div class="alert alert-amber">⚠️ ${esc(x)}</div>`);
-      document.getElementById('audit-alerts').innerHTML = (reds.length || ambers.length) ? reds.concat(ambers).join('') : '<div class="alert alert-green">✅ 所有目標對齊、時程、人力負荷與品質硬閘門全數通過！</div>';
-      document.getElementById('qa-table-body').innerHTML = tasks.map(t => `
-        <tr>
-          <td><strong>${esc(t.id)}</strong><br/>${esc(t.title)}</td>
-          <td><span class="tag">${esc(t.objective_id || '-')}</span></td>
-          <td>${esc(t.assignee || '-')}</td>
-          <td><span class="tag st-${esc(t.status)}">${esc(t.status)}</span><br/><span class="tag st-${esc(t.qa_status)}">QA:${esc(t.qa_status)}</span></td>
-          <td>${(t.acceptance_criteria || []).map(c => `<div>${c.passed ? '✅' : '⬜'} ${esc(c.criterion)}</div>`).join('') || '-'}</td>
-          <td>${(t.evidence || []).map(e => `<div>• ${esc(e)}</div>`).join('') || '-'}</td>
-        </tr>
-      `).join('');
+    /* ==================== 2. ACADEMIC-RESEARCH VIEW ==================== */
+    function renderAcademicBoard(force) {
+      const audit = STATE.audit || {};
+      const milestones = STATE.milestones || [];
+      const papers = STATE.papers || [];
+      const exps = STATE.experiments || [];
+      const checks = STATE.ethics_checks || [];
+
+      const avgPct = milestones.length ? Math.round(milestones.reduce((s, m) => s + (Number(m.completion_pct) || 0), 0) / milestones.length) : 0;
+      const verifiedPapers = papers.filter(p => p.citation_verified).length;
+      const doneExps = exps.filter(e => e.status === 'done').length;
+      const passedEth = checks.filter(c => c.status === 'passed').length;
+
+      document.getElementById('kpi-grid').innerHTML = `
+        <div class="kpi"><div class="label">研究總進度</div><div class="value" style="color:var(--accent)">${avgPct}%</div><div class="hint">${esc(STATE.target_venue || '目標期刊/會議')}</div></div>
+        <div class="kpi"><div class="label">文獻庫 / 引文已查核</div><div class="value" style="color:var(--green)">${verifiedPapers} / ${papers.length}</div><div class="hint">PRISMA 收錄 ${papers.filter(p => p.status === 'included').length} 篇</div></div>
+        <div class="kpi"><div class="label">實驗與基準測試</div><div class="value" style="color:var(--purple)">${doneExps} / ${exps.length}</div><div class="hint">可重現 ${exps.filter(e => e.reproducible).length} 組</div></div>
+        <div class="kpi"><div class="label">學術倫理硬閘門</div><div class="value" style="color:${passedEth === checks.length ? 'var(--green)' : 'var(--amber)'}">${passedEth} / ${checks.length}</div><div class="hint">通過檢查項</div></div>
+      `;
+
+      const msStatuses = ['todo', 'in_progress', 'done'];
+      document.getElementById('panel-t1').innerHTML = `
+        <div class="card"><h2>📈 研究進度里程碑</h2>
+          ${milestones.map(m => `
+            <div class="task-row">
+              <div class="task-top">
+                <strong>${esc(m.id)} · ${esc(m.title)}</strong>
+                <div><span class="tag">${esc(m.stage)}</span><span class="tag">截止 ${esc(m.due_date || '-')}</span>
+                  <select onchange="updatePackItem('milestone','${esc(m.id)}',{status:this.value, completion_pct:this.value==='done'?100:(this.value==='in_progress'?50:0)})">
+                    ${msStatuses.map(st => `<option value="${st}" ${m.status === st ? 'selected' : ''}>${st}</option>`).join('')}
+                  </select>
+                </div>
+              </div>
+              <div class="bar-track"><div class="bar-fill fill-blue" style="width:${Number(m.completion_pct) || 0}%"></div></div>
+              <div style="font-size:11px;color:var(--muted)">${esc(m.notes || '')}</div>
+            </div>`).join('')}
+        </div>
+        <div class="card"><h2>🧪 實驗與基準測試追蹤表</h2><div style="overflow:auto;"><table>
+          <thead><tr><th>ID</th><th>實驗名稱</th><th>方法</th><th>資料集</th><th>主要指標</th><th>vs Baseline</th><th>可重現</th><th>狀態</th></tr></thead>
+          <tbody>${exps.map(e => `<tr><td><strong>${esc(e.id)}</strong></td><td>${esc(e.name)}</td><td>${esc(e.method)}</td><td>${esc(e.dataset)}</td><td><strong>${esc(e.primary_metric)}</strong></td><td style="color:var(--green)">${esc(e.baseline_delta)}</td><td>${e.reproducible ? '✅' : '⚠️'}</td><td><span class="tag st-${esc(e.status)}">${esc(e.status)}</span></td></tr>`).join('')}</tbody>
+        </table></div></div>
+      `;
+
+      const pStatuses = ['crawled', 'screened', 'included', 'excluded'];
+      document.getElementById('panel-t2').innerHTML = `
+        <div class="card"><h2>📚 學術論文爬取與 PRISMA 篩選庫（共 ${papers.length} 篇）</h2><div style="overflow:auto;"><table>
+          <thead><tr><th>ID</th><th>論文標題與作者</th><th>來源 (arXiv/DOI)</th><th>引文查核</th><th>篩選狀態</th><th>核心發現</th></tr></thead>
+          <tbody>${papers.map(p => `<tr>
+            <td><strong>${esc(p.id)}</strong></td>
+            <td><strong>${esc(p.title)}</strong><div style="color:var(--muted);font-size:11px;">${esc(p.authors)} (${esc(p.year)})</div></td>
+            <td><span class="tag">${esc(p.source)}</span></td>
+            <td>${p.citation_verified ? '<span class="tag st-passed">✅ 已查核</span>' : '<span class="tag st-warning">⚠️ 待查核</span>'}</td>
+            <td><select onchange="updatePackItem('paper','${esc(p.id)}',{status:this.value})">${pStatuses.map(st => `<option value="${st}" ${p.status === st ? 'selected' : ''}>${st}</option>`).join('')}</select></td>
+            <td>${esc(p.key_finding || '')}</td>
+          </tr>`).join('')}</tbody>
+        </table></div></div>
+      `;
+
+      const eStatuses = ['pending', 'warning', 'passed', 'failed'];
+      document.getElementById('panel-t3').innerHTML = `
+        <div class="card"><h2>🚨 研究風險與合規警訊</h2>${renderAlertsHtml(audit)}</div>
+        <div class="card"><h2>🛡️ 學術倫理、原創性與可重現性檢查表</h2><table>
+          <thead><tr><th>ID</th><th>類別</th><th>檢核項目</th><th>狀態</th><th>佐證紀錄</th></tr></thead>
+          <tbody>${checks.map(c => `<tr>
+            <td><strong>${esc(c.id)}</strong></td>
+            <td><span class="tag">${esc(c.category)}</span></td>
+            <td>${esc(c.item)}</td>
+            <td><select onchange="updatePackItem('ethics','${esc(c.id)}',{status:this.value})">${eStatuses.map(st => `<option value="${st}" ${c.status === st ? 'selected' : ''}>${st}</option>`).join('')}</select></td>
+            <td>${esc(c.evidence || '')}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+      `;
+
+      renderMermaidDocPanel(STATE.proposal_md || '', '', '📝 研究計劃書與方法流程圖（PROPOSAL.md）', '', force);
     }
 
-    function renderDocs(force = false) {
-      document.getElementById('arch-doc').textContent = STATE.architecture_md || '(尚未建立 ARCHITECTURE.md)';
-      document.getElementById('charter-doc').textContent = STATE.charter_md || '(尚未建立 CHARTER.md)';
-      if (force || STATE.architecture_md !== LAST_ARCH_HASH) {
-        LAST_ARCH_HASH = STATE.architecture_md || '';
+    /* ==================== 3. EXEC-SECRETARY-DECK VIEW ==================== */
+    function renderSecretaryBoard(force) {
+      const audit = STATE.audit || {};
+      const events = STATE.events || [];
+      const items = STATE.action_items || [];
+      const decks = STATE.decks || [];
+      const drafts = STATE.comms_drafts || [];
+
+      const openItems = items.filter(i => i.status !== 'done').length;
+      const readyDecks = decks.filter(d => d.status === 'ready').length;
+      const awaiting = drafts.filter(d => d.status === 'awaiting_approval').length;
+
+      document.getElementById('kpi-grid').innerHTML = `
+        <div class="kpi"><div class="label">近期重要會議</div><div class="value" style="color:var(--accent)">${events.length}</div><div class="hint">已就緒 ${events.filter(e => e.prep_status === 'ready').length} 場</div></div>
+        <div class="kpi"><div class="label">進行中會議待辦</div><div class="value" style="color:var(--amber)">${openItems}</div><div class="hint">總計 ${items.length} 項</div></div>
+        <div class="kpi"><div class="label">簡報定稿進度</div><div class="value" style="color:var(--green)">${readyDecks} / ${decks.length}</div><div class="hint">投影片交付物</div></div>
+        <div class="kpi"><div class="label">待主管審批草稿</div><div class="value" style="color:${awaiting ? 'var(--amber)' : 'var(--green)'}">${awaiting}</div><div class="hint">外寄前安全確認</div></div>
+      `;
+
+      const aStatuses = ['todo', 'in_progress', 'done'];
+      document.getElementById('panel-t1').innerHTML = `
+        <div class="card"><h2>📅 行程與重要會議排程</h2>
+          <div class="grid-2">${events.map(e => `
+            <div class="member-card">
+              <div class="member-head"><strong>${esc(e.title)}</strong><span class="tag st-${esc(e.prep_status)}">${esc(e.prep_status)}</span></div>
+              <div style="font-size:12px;color:var(--muted);margin-top:4px;">🗓️ ${esc(e.date)} ${esc(e.time)} · 📍 ${esc(e.location || '-')}</div>
+              <div style="margin-top:6px;">${(e.attendees || []).map(a => `<span class="tag">👤 ${esc(a)}</span>`).join('')}${e.deck_linked ? `<span class="tag">📊 ${esc(e.deck_linked)}</span>` : ''}</div>
+            </div>`).join('')}
+          </div>
+        </div>
+        <div class="card"><h2>✅ 會議紀要待辦追蹤</h2><table>
+          <thead><tr><th>ID</th><th>來源會議</th><th>待辦事項</th><th>負責人</th><th>截止日</th><th>優先級</th><th>狀態</th></tr></thead>
+          <tbody>${items.map(it => `<tr>
+            <td><strong>${esc(it.id)}</strong></td><td>${esc(it.meeting)}</td><td>${esc(it.task)}</td><td>${esc(it.owner)}</td><td>${esc(it.due_date)}</td>
+            <td><span class="tag st-${esc(it.priority)}">${esc(it.priority)}</span></td>
+            <td><select onchange="updatePackItem('action_item','${esc(it.id)}',{status:this.value})">${aStatuses.map(st => `<option value="${st}" ${it.status === st ? 'selected' : ''}>${st}</option>`).join('')}</select></td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+      `;
+
+      const dStatuses = ['outline', 'drafting', 'visual_qa', 'ready'];
+      document.getElementById('panel-t2').innerHTML = `
+        <div class="card"><h2>📊 簡報與視覺交付物看板</h2><div class="grid-2">
+          ${decks.map(d => `
+            <div class="member-card">
+              <div class="member-head"><strong>${esc(d.id)} · ${esc(d.title)}</strong>
+                <select onchange="updatePackItem('deck','${esc(d.id)}',{status:this.value})">${dStatuses.map(st => `<option value="${st}" ${d.status === st ? 'selected' : ''}>${st}</option>`).join('')}</select>
+              </div>
+              <div style="margin:6px 0;"><span class="tag">受眾: ${esc(d.audience)}</span><span class="tag">主題: ${esc(d.theme)}</span><span class="tag">${esc(d.slides_count)} 頁</span><span class="tag">截止 ${esc(d.due_date)}</span></div>
+              <div style="font-size:12px;color:var(--muted);">檔案: <code>${esc(d.file_path || '-')}</code></div>
+              <div style="font-size:12px;color:#fde68a;margin-top:4px;">審校備註: ${esc(d.review_notes || '無')}</div>
+            </div>`).join('')}
+        </div></div>
+      `;
+
+      const cStatuses = ['draft', 'awaiting_approval', 'sent'];
+      document.getElementById('panel-t3').innerHTML = `
+        <div class="card"><h2>🚨 待辦與外寄審批提醒</h2>${renderAlertsHtml(audit)}</div>
+        <div class="card"><h2>✉️ 溝通與信件草稿（外寄前須主管核准）</h2><table>
+          <thead><tr><th>ID</th><th>管道</th><th>收件對象</th><th>主旨與摘要</th><th>狀態</th></tr></thead>
+          <tbody>${drafts.map(dr => `<tr>
+            <td><strong>${esc(dr.id)}</strong></td><td><span class="tag">${esc(dr.channel)}</span></td><td>${esc(dr.recipient)}</td>
+            <td><strong>${esc(dr.subject)}</strong><div style="color:var(--muted);font-size:11px;">${esc(dr.summary)}</div></td>
+            <td><select onchange="updatePackItem('draft','${esc(dr.id)}',{status:this.value})">${cStatuses.map(st => `<option value="${st}" ${dr.status === st ? 'selected' : ''}>${st}</option>`).join('')}</select></td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+      `;
+
+      renderMermaidDocPanel('', STATE.briefing_md || '', '', '📰 主管每日簡報與決策備忘（BRIEFING.md）', force);
+    }
+
+    function renderMermaidDocPanel(mermaidDoc, secondDoc, title1, title2, force) {
+      let html = '';
+      if (title1) html += `<div class="card"><h2>${esc(title1)}</h2><div id="mermaid-container"></div><pre class="doc-box">${esc(mermaidDoc || '(尚未建立)')}</pre></div>`;
+      if (title2) html += `<div class="card"><h2>${esc(title2)}</h2><pre class="doc-box">${esc(secondDoc || '(尚未建立)')}</pre></div>`;
+      document.getElementById('panel-t4').innerHTML = html;
+      if (force || mermaidDoc !== LAST_MERMAID_SRC) {
+        LAST_MERMAID_SRC = mermaidDoc || '';
         renderMermaid();
       }
     }
 
     function renderMermaid() {
-      const raw = (STATE && STATE.architecture_md) || '';
-      const blocks = [...raw.matchAll(/```mermaid\s*([\s\S]*?)```/g)].map(m => m[1].trim());
       const box = document.getElementById('mermaid-container');
+      if (!box) return;
+      const blocks = [...(LAST_MERMAID_SRC || '').matchAll(/```mermaid\s*([\s\S]*?)```/g)].map(m => m[1].trim());
       if (!blocks.length) { box.innerHTML = ''; return; }
       box.innerHTML = blocks.map((b, i) => `<div class="mermaid-wrap"><div class="mermaid" id="mmd-${i}">${esc(b)}</div></div>`).join('');
       if (window.mermaid) {

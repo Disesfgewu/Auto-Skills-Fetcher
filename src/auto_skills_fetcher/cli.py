@@ -1274,6 +1274,8 @@ def _cmd_expand(args: argparse.Namespace) -> int:
 def _cmd_dashboard(args: argparse.Namespace) -> int:
     import importlib.util
 
+    from .assistant_hubs import default_hub_dirname
+
     packs_cfg_path = Path(args.packs_config).resolve()
     repo_root = packs_cfg_path.parents[1] if packs_cfg_path.exists() else Path.cwd()
     script_path = repo_root / "skills" / "project-command-center" / "scripts" / "serve_dashboard.py"
@@ -1285,8 +1287,10 @@ def _cmd_dashboard(args: argparse.Namespace) -> int:
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
+    hub_path = args.hub or str(Path(args.project_root) / default_hub_dirname(args.pack))
     argv = [
-        "--hub", args.hub,
+        "--pack", args.pack,
+        "--hub", hub_path,
         "--project-root", args.project_root,
         "--agent", args.agent,
         "--host", args.host,
@@ -1302,17 +1306,20 @@ def _cmd_dashboard(args: argparse.Namespace) -> int:
 
 
 def _cmd_launch(args: argparse.Namespace) -> int:
-    """One-command interactive assistant launcher: assemble pack + boot agy/claude/codex + visual UI."""
+    """One-command interactive assistant launcher for PM, Academic Research, or Executive Secretary."""
+    import importlib.util
     import shutil
     import subprocess
     import threading
     import webbrowser
 
+    from .assistant_hubs import default_hub_dirname, init_hub_for_pack
+
     project_root = Path(args.project_root).expanduser().resolve()
     project_root.mkdir(parents=True, exist_ok=True)
-    hub_dir = Path(args.hub) if args.hub else (project_root / "project-hub")
+    hub_dir = Path(args.hub) if args.hub else (project_root / default_hub_dirname(args.pack))
 
-    # 1. Assemble requested skill pack into the project's native skill dirs so the chosen CLI loads them
+    # 1. Assemble requested skill pack into the project's native skill dirs so agy/claude/codex load them
     asm_ns = argparse.Namespace(
         db=args.db,
         packs_config=args.packs_config,
@@ -1329,9 +1336,7 @@ def _cmd_launch(args: argparse.Namespace) -> int:
     if rc != 0:
         return rc
 
-    # 2. Load dashboard/assistant module
-    import importlib.util
-
+    # 2. Load dashboard/assistant module & initialize pack-specific hub if missing
     packs_cfg_path = Path(args.packs_config).resolve()
     repo_root = packs_cfg_path.parents[1] if packs_cfg_path.exists() else Path.cwd()
     script_path = repo_root / "skills" / "project-command-center" / "scripts" / "serve_dashboard.py"
@@ -1340,10 +1345,10 @@ def _cmd_launch(args: argparse.Namespace) -> int:
     dash_mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(dash_mod)
 
-    if args.init_sample or (args.pack == "project-mgmt" and not hub_dir.exists()):
-        dash_mod.init_sample_hub(hub_dir)
+    if args.init_sample or not hub_dir.exists():
+        init_hub_for_pack(args.pack, hub_dir, pm_initializer=dash_mod.init_sample_hub)
 
-    # 3a. Terminal interactive mode: start visual board in background + launch interactive agy/claude/codex TTY
+    # 3a. Terminal interactive mode: start pack-specific visual board in background + launch interactive CLI
     if args.terminal:
         binary = shutil.which(args.agent)
         if not binary:
@@ -1353,6 +1358,7 @@ def _cmd_launch(args: argparse.Namespace) -> int:
             hub_dir,
             host=args.host,
             port=args.port,
+            pack_name=args.pack,
             project_root=project_root,
             default_agent=args.agent,
             codex_model=args.codex_model,
@@ -1360,7 +1366,7 @@ def _cmd_launch(args: argparse.Namespace) -> int:
         actual_port = srv.server_address[1]
         url = f"http://{args.host}:{actual_port}"
         threading.Thread(target=srv.serve_forever, daemon=True).start()
-        print(f"Visual PM Board running at {url} — launching interactive '{args.agent}' session...")
+        print(f"Visual Board [{args.pack}] running at {url} — launching interactive '{args.agent}' session...")
         if args.open:
             webbrowser.open(url)
         try:
@@ -1375,6 +1381,7 @@ def _cmd_launch(args: argparse.Namespace) -> int:
     # 3b. Default: Launch Split-Screen Interactive Assistant Web UI powered by agy / claude / codex
     dash_ns = argparse.Namespace(
         packs_config=args.packs_config,
+        pack=args.pack,
         hub=str(hub_dir),
         project_root=str(project_root),
         agent=args.agent,
@@ -1519,9 +1526,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_dash = sub.add_parser(
         "dashboard",
-        help="Launch the interactive PM Assistant (agy/claude/codex) + live visual workforce dashboard.",
+        help="Launch the interactive Assistant (agy/claude/codex) + live visual board for any pack.",
     )
-    p_dash.add_argument("--hub", default="./project-hub", help="Path to project-hub directory.")
+    p_dash.add_argument(
+        "--pack",
+        choices=["project-mgmt", "academic-research", "exec-secretary-deck"],
+        default="project-mgmt",
+        help="Assistant pack mode (default: project-mgmt).",
+    )
+    p_dash.add_argument("--hub", help="Path to hub directory (defaults to project-hub / research-hub / secretary-hub).")
     p_dash.add_argument("--project-root", default=".", help="Workspace root where agy/claude/codex runs.")
     p_dash.add_argument(
         "--agent",

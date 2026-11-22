@@ -71,12 +71,11 @@ skillpack update --target ./.agents/skills --skill sprint-operations --incoming 
 # Roll back a skill to its previous backup
 skillpack rollback --target ./.agents/skills --skill sprint-operations
 
-# Launch an interactive PM Assistant powered by agy, claude, or codex + live visual workforce board
-skillpack launch --pack project-mgmt --agent agy --project-root . --open
-skillpack launch --pack project-mgmt --agent claude --project-root . --open
-skillpack launch --pack project-mgmt --agent codex --project-root . --open
-# Or run interactive CLI in terminal while keeping the visual board live in browser:
-skillpack launch --pack project-mgmt --agent claude --project-root . --terminal --open
+# Launch interactive AI Assistants (agy / claude / codex) + live visual board for ALL 3 packs:
+skillpack launch --pack project-mgmt --agent agy --project-root . --open          # PM & Workforce Board
+skillpack launch --pack academic-research --agent claude --project-root . --open  # Research, Papers, Experiments & Ethics Board
+skillpack launch --pack exec-secretary-deck --agent codex --project-root . --open # Schedule, Decks & Approval Comms Board
+# Add --terminal to chat directly inside agy/claude/codex CLI while keeping the visual board open in browser!
 ```
 
 ## Multi-Agent Target Paths (`--agent`)
