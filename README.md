@@ -31,6 +31,10 @@ skillpack sync
 # Check system status and configured packs
 skillpack status
 
+# Inspect skills inside a pack (or what is currently installed in a project/global dir)
+skillpack show --pack academic-research
+skillpack show --agent all --scope project --project-root .
+
 # Crawl GitHub for additional domain candidates
 skillpack crawl --domain academic --dry-run
 skillpack crawl --domain academic
@@ -42,6 +46,11 @@ skillpack recommend --domain academic
 skillpack assemble --pack academic-research --agent all --scope project --fetch --prune
 # Switch pack cleanly (removes only skillpack-managed skills from the previous pack)
 skillpack assemble --pack exec-secretary-deck --agent all --scope project --fetch --prune
+
+# Check whether installed skills have upstream updates or stronger Challengers
+skillpack check-updates --agent all --scope project --show-diff
+# Apply available updates interactively (replace / keep / side-by-side) with automatic backup
+skillpack check-updates --agent all --scope project --no-fetch --apply interactive --show-diff
 
 # Or install into a custom directory
 skillpack assemble --pack academic-research --target ./.skills/academic --fetch

@@ -310,6 +310,97 @@ class TestAutoSkillsFetcher(unittest.TestCase):
             self.assertFalse((skills_dir / "old-skill").exists())
             self.assertTrue(user_skill.exists())
 
+    def test_show_and_check_updates_cli(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "reg.sqlite"
+            proj_root = Path(tmp) / "workspace"
+            proj_root.mkdir()
+            base_args = [
+                "--db", str(db_path),
+                "--packs-config", str(PACKS_CFG_PATH),
+                "--sources-config", str(SOURCES_CFG_PATH),
+            ]
+            self.assertEqual(cli_main(base_args + ["init"]), 0)
+            self.assertEqual(
+                cli_main(
+                    base_args
+                    + [
+                        "assemble",
+                        "--pack", "project-mgmt",
+                        "--agent", "all",
+                        "--scope", "project",
+                        "--project-root", str(proj_root),
+                    ]
+                ),
+                0,
+            )
+            # show pack + installed state
+            self.assertEqual(
+                cli_main(
+                    base_args
+                    + [
+                        "show",
+                        "--pack", "project-mgmt",
+                        "--agent", "all",
+                        "--scope", "project",
+                        "--project-root", str(proj_root),
+                    ]
+                ),
+                0,
+            )
+
+            # Simulate an upstream update in registry for sprint-operations
+            reg = SkillRegistry(db_path)
+            try:
+                skills = {s.name: s for s in reg.list_skills()}
+                sprint_rec = skills["sprint-operations"]
+                updated_md = sprint_rec.raw_content + "\n## New Guardrail\nAlways verify sprint velocity.\n"
+                updated_doc = parse_skill_md(updated_md)
+                sprint_rec.raw_content = updated_md
+                sprint_rec.content_hash = updated_doc.content_hash
+                sprint_rec.commit_sha = "newsha999"
+                reg.upsert_skill(sprint_rec)
+            finally:
+                reg.close()
+
+            # Dry check-updates (no-fetch) should succeed and detect update
+            self.assertEqual(
+                cli_main(
+                    base_args
+                    + [
+                        "check-updates",
+                        "--agent", "all",
+                        "--scope", "project",
+                        "--project-root", str(proj_root),
+                        "--no-fetch",
+                    ]
+                ),
+                0,
+            )
+            # Apply update across all agent dirs
+            self.assertEqual(
+                cli_main(
+                    base_args
+                    + [
+                        "check-updates",
+                        "--agent", "all",
+                        "--scope", "project",
+                        "--project-root", str(proj_root),
+                        "--no-fetch",
+                        "--apply", "replace",
+                    ]
+                ),
+                0,
+            )
+            self.assertIn(
+                "New Guardrail",
+                (proj_root / ".agents" / "skills" / "sprint-operations" / "SKILL.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "New Guardrail",
+                (proj_root / ".claude" / "skills" / "sprint-operations" / "SKILL.md").read_text(encoding="utf-8"),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

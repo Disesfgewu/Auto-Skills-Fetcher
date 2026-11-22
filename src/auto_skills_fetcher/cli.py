@@ -20,7 +20,7 @@ from .pack_manager import (
     resolve_pack_skills,
     save_skill_bundle,
 )
-from .parser import parse_skill_md
+from .parser import compute_content_hash, parse_skill_md
 from .registry import SkillRegistry
 from .scorer import evaluate_skill
 from .security import scan_skill_security
@@ -424,6 +424,337 @@ def _cmd_rollback(args: argparse.Namespace) -> int:
     return 0
 
 
+def _count_bundle_files(db_path: str | Path, skill_id: str) -> int:
+    bdir = bundle_cache_dir(db_path, skill_id)
+    if not bdir.is_dir():
+        return 0
+    return sum(1 for p in bdir.rglob("*") if p.is_file())
+
+
+def _resolve_cli_targets(args: argparse.Namespace, *, default_all_agents: bool = False) -> list[tuple[str, Path]]:
+    targets: list[tuple[str, Path]] = []
+    agent = getattr(args, "agent", None)
+    target = getattr(args, "target", None)
+    if not agent and not target and default_all_agents:
+        agent = "all"
+    if agent:
+        targets.extend(
+            resolve_agent_targets(
+                agent,
+                scope=getattr(args, "scope", "project"),
+                project_root=getattr(args, "project_root", "."),
+            )
+        )
+    if target:
+        targets.append(("custom", Path(target).expanduser().resolve()))
+    return targets
+
+
+def _cmd_show(args: argparse.Namespace) -> int:
+    packs_cfg = load_yaml_config(args.packs_config)
+    packs = packs_cfg.get("packs", {})
+    reg = SkillRegistry(args.db)
+    try:
+        indexed = {s.skill_id: s for s in reg.list_skills()}
+        targets = _resolve_cli_targets(args, default_all_agents=False)
+
+        pack_reports: list[dict] = []
+        show_packs = bool(args.pack) or not targets
+        if show_packs:
+            pack_names = [args.pack] if args.pack else list(packs.keys())
+            for pname in pack_names:
+                resolved = resolve_pack_skills(packs_cfg, pname)
+                cfg = packs[pname]
+                skills_out = []
+                for item in resolved:
+                    sid = f"{item['repo']}:{item['path']}"
+                    rec = indexed.get(sid)
+                    if rec is None:
+                        status = "not-synced"
+                        score = None
+                        size_bytes = 0
+                        assets = 0
+                        sha = ""
+                    else:
+                        status = "stub" if rec.commit_sha == "preset-seed" else "upstream"
+                        score = rec.score.total if rec.score else None
+                        size_bytes = len(rec.raw_content.encode("utf-8"))
+                        assets = _count_bundle_files(args.db, sid)
+                        sha = rec.commit_sha[:8]
+                    skills_out.append(
+                        {
+                            "name": item["name"],
+                            "slot": item.get("slot"),
+                            "source_pack": item.get("source_pack"),
+                            "repo": item["repo"],
+                            "path": item["path"],
+                            "status": status,
+                            "score": score,
+                            "size_bytes": size_bytes,
+                            "assets": assets,
+                            "sha": sha,
+                        }
+                    )
+                pack_reports.append(
+                    {
+                        "pack": pname,
+                        "domain": cfg.get("domain"),
+                        "description": cfg.get("description", ""),
+                        "update_policy": cfg.get("update_policy"),
+                        "extends": cfg.get("extends", []),
+                        "skills": skills_out,
+                    }
+                )
+
+        installed_reports: list[dict] = []
+        for label, target_path in targets:
+            mgr = PackManager(target_path)
+            lock = mgr.read_lock()
+            unmanaged = mgr.list_unmanaged_skills()
+            installed_reports.append(
+                {
+                    "agent": label,
+                    "path": str(target_path),
+                    "pack": lock.get("pack") or "(none)",
+                    "update_policy": lock.get("update_policy", ""),
+                    "skills": lock.get("skills", {}),
+                    "unmanaged_skills": unmanaged,
+                }
+            )
+
+        if args.json:
+            print(
+                json.dumps(
+                    {"packs": pack_reports, "installed": installed_reports},
+                    indent=2,
+                    ensure_ascii=False,
+                )
+            )
+            return 0
+
+        for pr in pack_reports:
+            ext = f" (extends: {', '.join(pr['extends'])})" if pr["extends"] else ""
+            print(f"Pack: {pr['pack']} [domain={pr['domain']}, policy={pr['update_policy']}]{ext}")
+            if pr["description"]:
+                print(f"  {pr['description']}")
+            print(f"  {'SKILL':<24} {'STATUS':<10} {'SCORE':>6} {'SIZE':>8} {'ASSETS':>6}  REPO")
+            for sk in pr["skills"]:
+                sc_str = f"{sk['score']:.1f}" if sk["score"] is not None else "-"
+                sz_str = f"{sk['size_bytes'] / 1024:.1f}KB" if sk["size_bytes"] else "-"
+                print(
+                    f"  {sk['name']:<24} {sk['status']:<10} {sc_str:>6} {sz_str:>8} {sk['assets']:>6}  {sk['repo']}"
+                )
+            print()
+
+        for ir in installed_reports:
+            print(f"Installed [{ir['agent']}] -> {ir['path']}")
+            print(f"  Active pack: {ir['pack']} (policy={ir['update_policy'] or '-'})")
+            if not ir["skills"]:
+                print("  No skillpack-managed skills installed here.")
+            else:
+                print(f"  {'SKILL':<24} {'STATE':<12} {'SHA':<10} {'ASSETS':>6}  REPO")
+                for sname, meta in ir["skills"].items():
+                    sha = str(meta.get("commit_sha", ""))[:8] or "-"
+                    assets = int(meta.get("bundled_files", 0))
+                    print(
+                        f"  {sname:<24} {meta.get('state', '-'):<12} {sha:<10} {assets:>6}  {meta.get('repo', '')}"
+                    )
+            if ir["unmanaged_skills"]:
+                print(f"  Unmanaged user skills (preserved): {', '.join(ir['unmanaged_skills'])}")
+            print()
+
+        return 0
+    finally:
+        reg.close()
+
+
+def _cmd_check_updates(args: argparse.Namespace) -> int:
+    packs_cfg = load_yaml_config(args.packs_config)
+    sources_cfg = load_yaml_config(args.sources_config)
+    targets = _resolve_cli_targets(args, default_all_agents=True)
+    if not targets:
+        print("Error: specify --target <dir> or --agent {agy,claude,codex,all}.", file=sys.stderr)
+        return 2
+
+    reg = SkillRegistry(args.db)
+    try:
+        # Collect installed lockfiles across targets
+        target_locks: list[tuple[str, Path, PackManager, dict]] = []
+        packs_to_sync: set[str] = set()
+        for label, target_path in targets:
+            mgr = PackManager(target_path)
+            lock = mgr.read_lock()
+            target_locks.append((label, target_path, mgr, lock))
+            pname = lock.get("pack")
+            if pname and pname in packs_cfg.get("packs", {}):
+                packs_to_sync.add(pname)
+
+        if not args.no_fetch:
+            if packs_to_sync:
+                for pname in sorted(packs_to_sync):
+                    if not args.json:
+                        print(f"Checking upstream GitHub updates for pack '{pname}'...")
+                    _sync_preset_skills(packs_cfg, sources_cfg, reg, args.db, pack_name=pname, fetch=True)
+            else:
+                if not args.json:
+                    print("Checking upstream GitHub updates for all configured packs...")
+                _sync_preset_skills(packs_cfg, sources_cfg, reg, args.db, pack_name="all", fetch=True)
+
+        indexed = {s.skill_id: s for s in reg.list_skills()}
+        all_updates_report: list[dict] = []
+        total_available = 0
+        checked_domains: set[str] = set()
+
+        for label, target_path, mgr, lock in target_locks:
+            installed_skills = lock.get("skills", {})
+            active_pack = lock.get("pack", "")
+            if active_pack in packs_cfg.get("packs", {}):
+                dom = packs_cfg["packs"][active_pack].get("domain")
+                if dom:
+                    checked_domains.add(dom)
+
+            target_entries: list[dict] = []
+            for sname, meta in installed_skills.items():
+                repo = meta.get("repo", "")
+                spath = meta.get("path", "")
+                sid = f"{repo}:{spath}"
+                rec = indexed.get(sid)
+                skill_file = target_path / sname / "SKILL.md"
+                if not skill_file.exists() or rec is None:
+                    continue
+
+                installed_text = skill_file.read_text(encoding="utf-8")
+                installed_hash = compute_content_hash(installed_text)
+                upstream_hash = rec.content_hash
+                state = meta.get("state", "tracked")
+
+                if installed_hash == upstream_hash:
+                    target_entries.append(
+                        {
+                            "skill": sname,
+                            "status": "up_to_date",
+                            "state": state,
+                            "installed_sha": str(meta.get("commit_sha", ""))[:8],
+                            "upstream_sha": rec.commit_sha[:8],
+                        }
+                    )
+                    continue
+
+                diff = build_semantic_diff(sname, installed_text, rec.raw_content)
+                sec = scan_skill_security(rec.raw_content)
+                status = "update_available" if sec.passed else "security_blocked"
+                if sec.passed:
+                    total_available += 1
+
+                entry = {
+                    "skill": sname,
+                    "status": status,
+                    "state": state,
+                    "installed_sha": str(meta.get("commit_sha", ""))[:8],
+                    "upstream_sha": rec.commit_sha[:8],
+                    "summary": diff.summary,
+                    "added_lines": diff.added_lines,
+                    "removed_lines": diff.removed_lines,
+                    "repo": repo,
+                    "skill_id": sid,
+                    "applied": None,
+                }
+
+                if args.apply and sec.passed:
+                    if state == "pinned" and args.apply != "interactive" and not args.force:
+                        entry["applied"] = "skipped (pinned; pass --force or use --apply interactive)"
+                    else:
+                        decision = args.apply
+                        if decision == "interactive":
+                            print(f"\n[{label}] Update available for '{sname}' ({diff.summary}, state={state})")
+                            if args.show_diff:
+                                print(diff.unified_diff)
+                            choice = input("Choose action [replace / keep / side-by-side]: ").strip().lower()
+                            decision = choice if choice in {"replace", "keep", "side-by-side"} else "keep"
+                        msg = mgr.apply_update(
+                            sname,
+                            rec.raw_content,
+                            new_commit_sha=rec.commit_sha,
+                            decision=decision,
+                            new_repo=rec.repo,
+                            bundle_dir=bundle_cache_dir(args.db, sid),
+                        )
+                        entry["applied"] = msg
+
+                target_entries.append(entry)
+
+            all_updates_report.append(
+                {
+                    "agent": label,
+                    "path": str(target_path),
+                    "pack": active_pack or "(none)",
+                    "skills": target_entries,
+                }
+            )
+
+        # Also check Champion-Challenger recommendations from local registry
+        champions = reg.list_skills(champions_only=True)
+        candidates = reg.list_skills(candidates_only=True)
+        recs = recommend_replacements(champions, candidates, config=sources_cfg)
+        if checked_domains:
+            recs = [r for r in recs if r.domain in checked_domains or r.domain == "base"]
+
+        if args.json:
+            print(
+                json.dumps(
+                    {
+                        "targets": all_updates_report,
+                        "updates_available": total_available,
+                        "recommendations": [r.__dict__ for r in recs],
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+            )
+            return 0
+
+        for trep in all_updates_report:
+            print(f"\nUpdate Check [{trep['agent']}] -> {trep['path']} (pack={trep['pack']})")
+            if not trep["skills"]:
+                print("  No skillpack-managed skills found here. Run 'skillpack assemble' first.")
+                continue
+            for item in trep["skills"]:
+                if item["status"] == "up_to_date":
+                    print(f"  [UP-TO-DATE] {item['skill']} (sha={item['installed_sha'] or '-'})")
+                elif item["status"] == "security_blocked":
+                    print(f"  [BLOCKED]    {item['skill']} — upstream update failed security scan!")
+                else:
+                    pin_tag = " [PINNED]" if item["state"] == "pinned" else ""
+                    print(
+                        f"  [UPDATE]{pin_tag} {item['skill']}: {item['summary']} "
+                        f"({item['installed_sha'] or '-'} -> {item['upstream_sha'] or '-'})"
+                    )
+                    if args.show_diff and not args.apply:
+                        installed_text = (Path(trep["path"]) / item["skill"] / "SKILL.md").read_text(
+                            encoding="utf-8"
+                        )
+                        rec = indexed[item["skill_id"]]
+                        print(build_semantic_diff(item["skill"], installed_text, rec.raw_content).unified_diff)
+                    if item["applied"]:
+                        print(f"    -> {item['applied']}")
+
+        print("\nChampion-Challenger Recommendations:")
+        if not recs:
+            print("  No higher-scoring challengers exceeded the replacement margin.")
+        else:
+            for r in recs:
+                print(f"  [{r.kind.upper()}] ({r.domain}) {r.rationale}")
+
+        if total_available > 0 and not args.apply:
+            print(
+                "\nTip: run 'skillpack check-updates --no-fetch --apply interactive --show-diff' "
+                "(or '--apply replace') to apply available updates."
+            )
+        return 0
+    finally:
+        reg.close()
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="skillpack",
@@ -449,6 +780,50 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_status = sub.add_parser("status", help="Show registry and configured pack status.")
     p_status.set_defaults(func=_cmd_status)
+
+    p_show = sub.add_parser("show", help="Inspect skills inside configured packs or installed agent directories.")
+    p_show.add_argument("--pack", help="Show details for a specific pack from packs.yaml.")
+    p_show.add_argument("--target", help="Inspect installed skills in a custom target directory.")
+    p_show.add_argument(
+        "--agent",
+        choices=["agy", "claude", "codex", "all"],
+        help="Inspect installed skills in native directory for agy, claude, codex, or all.",
+    )
+    p_show.add_argument("--scope", choices=["project", "global"], default="project")
+    p_show.add_argument("--project-root", default=".")
+    p_show.add_argument("--json", action="store_true", help="Output JSON.")
+    p_show.set_defaults(func=_cmd_show)
+
+    p_chk = sub.add_parser(
+        "check-updates",
+        help="Check installed skills against upstream GitHub versions and Challenger recommendations.",
+    )
+    p_chk.add_argument("--target", help="Check a custom assembled pack directory.")
+    p_chk.add_argument(
+        "--agent",
+        choices=["agy", "claude", "codex", "all"],
+        help="Check native directory for agy, claude, codex, or all (default: all when --target omitted).",
+    )
+    p_chk.add_argument("--scope", choices=["project", "global"], default="project")
+    p_chk.add_argument("--project-root", default=".")
+    p_chk.add_argument(
+        "--no-fetch",
+        action="store_true",
+        help="Compare against local registry without fetching from GitHub.",
+    )
+    p_chk.add_argument("--show-diff", action="store_true", help="Print unified diff for available updates.")
+    p_chk.add_argument(
+        "--apply",
+        choices=["interactive", "replace", "keep", "side-by-side"],
+        help="Apply available upstream updates directly or interactively.",
+    )
+    p_chk.add_argument(
+        "--force",
+        action="store_true",
+        help="Allow non-interactive --apply replace to update pinned skills.",
+    )
+    p_chk.add_argument("--json", action="store_true", help="Output JSON.")
+    p_chk.set_defaults(func=_cmd_check_updates)
 
     p_crawl = sub.add_parser("crawl", help="Crawl GitHub for SKILL.md candidates by domain.")
     p_crawl.add_argument("--domain", default="all", help="Domain name or 'all'.")

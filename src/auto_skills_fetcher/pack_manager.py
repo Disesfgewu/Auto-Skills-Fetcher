@@ -201,6 +201,45 @@ class PackManager:
             return {"version": 1, "pack": "", "skills": {}}
         return json.loads(self.lock_path.read_text(encoding="utf-8"))
 
+    def read_lock(self) -> dict[str, Any]:
+        """Return parsed skills-lock.json contents (or empty structure if absent)."""
+        return self._read_lock()
+
+    def list_unmanaged_skills(self) -> list[str]:
+        """List skill directories containing SKILL.md that are not managed by skillpack."""
+        if not self.target_dir.is_dir():
+            return []
+        managed = set(self._read_lock().get("skills", {}).keys())
+        unmanaged: list[str] = []
+        for child in sorted(self.target_dir.iterdir()):
+            if not child.is_dir() or child.name.startswith("."):
+                continue
+            if child.name in managed:
+                continue
+            if (child / "SKILL.md").is_file():
+                unmanaged.append(child.name)
+        return unmanaged
+
+    @staticmethod
+    def _copy_bundle(bundle_dir_raw: str | Path | None, dest_dir: Path) -> int:
+        if not bundle_dir_raw:
+            return 0
+        bdir = Path(bundle_dir_raw)
+        if not bdir.is_dir():
+            return 0
+        count = 0
+        for src_file in bdir.rglob("*"):
+            if not src_file.is_file():
+                continue
+            rel = src_file.relative_to(bdir)
+            dest_file = dest_dir / rel
+            dest_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src_file, dest_file)
+            if dest_file.suffix == ".sh":
+                os.chmod(dest_file, 0o755)
+            count += 1
+        return count
+
     def _write_lock(self, data: dict[str, Any]) -> None:
         self.target_dir.mkdir(parents=True, exist_ok=True)
         self.lock_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -238,21 +277,7 @@ class PackManager:
             skill_dir.mkdir(parents=True, exist_ok=True)
             (skill_dir / "SKILL.md").write_text(content, encoding="utf-8")
 
-            bundled_count = 0
-            bundle_dir_raw = item.get("bundle_dir")
-            if bundle_dir_raw:
-                bdir = Path(bundle_dir_raw)
-                if bdir.is_dir():
-                    for src_file in bdir.rglob("*"):
-                        if not src_file.is_file():
-                            continue
-                        rel = src_file.relative_to(bdir)
-                        dest_file = skill_dir / rel
-                        dest_file.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(src_file, dest_file)
-                        if dest_file.suffix == ".sh":
-                            os.chmod(dest_file, 0o755)
-                        bundled_count += 1
+            bundled_count = self._copy_bundle(item.get("bundle_dir"), skill_dir)
 
             lock["skills"][name] = {
                 "slot": item.get("slot"),
@@ -277,6 +302,7 @@ class PackManager:
         new_commit_sha: str,
         decision: str,  # "replace" | "keep" | "side-by-side"
         new_repo: str | None = None,
+        bundle_dir: str | Path | None = None,
     ) -> str:
         """Apply user's explicit decision on an incoming skill update."""
         lock = self._read_lock()
@@ -296,11 +322,13 @@ class PackManager:
             alt_dir = self.target_dir / alt_name
             alt_dir.mkdir(parents=True, exist_ok=True)
             (alt_dir / "SKILL.md").write_text(new_content, encoding="utf-8")
+            bundled_count = self._copy_bundle(bundle_dir, alt_dir)
             base_entry = dict(lock["skills"].get(skill_name, {}))
             base_entry.update(
                 {
                     "commit_sha": new_commit_sha,
                     "content_hash": compute_content_hash(new_content),
+                    "bundled_files": bundled_count,
                     "state": "side-by-side",
                     "installed_at": now,
                 }
@@ -319,6 +347,7 @@ class PackManager:
             shutil.copy2(skill_file, backup_path)
 
             skill_file.write_text(new_content, encoding="utf-8")
+            bundled_count = self._copy_bundle(bundle_dir, skill_file.parent)
             entry = lock["skills"].setdefault(skill_name, {})
             entry.update(
                 {
@@ -329,6 +358,8 @@ class PackManager:
                     "updated_at": now,
                 }
             )
+            if bundle_dir is not None:
+                entry["bundled_files"] = bundled_count
             if new_repo:
                 entry["repo"] = new_repo
             self._write_lock(lock)
