@@ -93,14 +93,35 @@ def build_pm_prompt(
     history: list[dict[str, str]] | None = None,
     include_history: bool = False,
 ) -> str:
-    """Wrap user's PM request with project-hub context so agy/claude/codex edits files directly."""
+    """Wrap user's PM request with live project-hub audit state so agy/claude/codex answers & edits smoothly."""
+    live_state = build_state_payload(hub_dir)
+    compact_snapshot = {
+        "project_name": live_state["project_name"],
+        "audit": live_state["audit"],
+        "team": live_state["team"],
+        "tasks": [
+            {
+                "id": t.get("id"),
+                "title": t.get("title"),
+                "objective_id": t.get("objective_id"),
+                "assignee": t.get("assignee"),
+                "due_date": t.get("due_date"),
+                "estimated_hours": t.get("estimated_hours"),
+                "status": t.get("status"),
+                "qa_status": t.get("qa_status"),
+            }
+            for t in live_state["tasks"]
+        ],
+    }
     lines = [
-        "你是本專案的互動式「專案管理指揮中心助手」(請優先遵循 project-command-center skill)。",
+        "你是本專案的互動式「專案管理指揮中心助手」(請遵循 project-command-center skill)。",
         f"專案治理資料夾位於: {hub_dir.resolve()}",
         "包含: CHARTER.md (計劃書), ARCHITECTURE.md (完整架構圖), objectives.yaml (專案目標), tasks.yaml (派發任務/截止日/品質驗收), team.yaml (人力與每週產能)。",
+        "以下是最新的專案即時稽核與人力負荷快照（JSON）：",
+        json.dumps(compact_snapshot, ensure_ascii=False),
         "規則：",
-        "1. 若使用者要求查詢進度、人力負荷、風險或品質，請讀取上述檔案並可執行 audit_project_hub.py 驗證。",
-        "2. 若使用者要求派發/調整任務、平衡人力、更新進度或補充驗收條件，請直接修改 project-hub/ 下對應檔案，前端視覺化看板會自動即時刷新。",
+        "1. 優先根據上方快照或直接讀寫 project-hub/ 檔案回答與處理，非必要請勿執行 shell 指令。",
+        "2. 若使用者要求派發/調整任務、平衡人力、更新進度或補充驗收條件，請直接編輯 project-hub/ 下對應檔案，前端視覺化看板會自動即時刷新。",
         "3. 請用繁體中文、條理清晰簡潔回覆，並明確列出已修改的項目或具體建議。",
     ]
     if include_history and history:
