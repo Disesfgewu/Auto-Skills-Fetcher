@@ -44,13 +44,13 @@ def build_partitioned_queries(
     if not keywords:
         return []
 
-    kw_expr = "(" + " OR ".join(keywords) + ")"
     queries: list[str] = []
     for bucket in size_buckets:
-        parts = ["filename:SKILL.md", kw_expr, f"size:{bucket}"]
-        if pushed_after:
-            parts.append(f"pushed:>{pushed_after}")
-        queries.append(" ".join(parts))
+        for kw in keywords:
+            parts = ["filename:SKILL.md", kw, f"size:{bucket}"]
+            if pushed_after:
+                parts.append(f"pushed:>{pushed_after}")
+            queries.append(" ".join(parts))
     return queries
 
 
@@ -87,11 +87,13 @@ class GitHubCrawler:
             raise
 
     def fetch_skill_file(
-        self, repo: str, path: str, *, ref: str = "main", etag: str | None = None
+        self, repo: str, path: str, *, ref: str | None = None, etag: str | None = None
     ) -> tuple[str | None, str | None, str | None]:
         """Fetch raw SKILL.md text, blob SHA, and ETag from a repository."""
         encoded_path = urllib.parse.quote(path.lstrip("/"))
-        url = f"{GITHUB_API_BASE}/repos/{repo}/contents/{encoded_path}?ref={urllib.parse.quote(ref)}"
+        url = f"{GITHUB_API_BASE}/repos/{repo}/contents/{encoded_path}"
+        if ref:
+            url += f"?ref={urllib.parse.quote(ref)}"
         status, payload, new_etag = self._request_json(url, etag=etag)
         if status == 304 or not isinstance(payload, dict):
             return None, None, new_etag

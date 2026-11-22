@@ -94,8 +94,9 @@ class TestAutoSkillsFetcher(unittest.TestCase):
         queries = build_partitioned_queries(
             self.sources_cfg["domain_queries"]["academic"], pushed_after="2026-01-01"
         )
-        self.assertEqual(len(queries), 3)
+        self.assertEqual(len(queries), 15)
         self.assertTrue(all("filename:SKILL.md" in q and "pushed:>2026-01-01" in q for q in queries))
+        self.assertTrue(all(" OR " not in q and "(" not in q for q in queries))
 
     def test_five_dimension_scorer_and_champion_challenger(self) -> None:
         weak_doc = parse_skill_md(WEAK_ACADEMIC_SKILL)

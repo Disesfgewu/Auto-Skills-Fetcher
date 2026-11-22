@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import urllib.error
 from pathlib import Path
 
 from .crawler import GitHubCrawler, build_partitioned_queries
@@ -108,7 +109,10 @@ def _cmd_crawl(args: argparse.Namespace) -> int:
             items = crawler.search_domain(dom, domain_queries[dom], max_items=args.limit)
             ingested = 0
             for item in items:
-                raw, sha, _ = crawler.fetch_skill_file(item["repo"], item["path"])
+                try:
+                    raw, sha, _ = crawler.fetch_skill_file(item["repo"], item["path"])
+                except urllib.error.HTTPError:
+                    continue
                 if not raw:
                     continue
                 sec = scan_skill_security(raw)
