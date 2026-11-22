@@ -1,0 +1,79 @@
+# Reference templates for project-hub/ files used by project-command-center
+
+# ---------------------------------------------------------------------------
+# 1. project-hub/objectives.yaml
+# ---------------------------------------------------------------------------
+objectives_example:
+  version: 1
+  project_name: "Example System Launch"
+  objectives:
+    - id: OBJ-01
+      title: "完成核心後端 API 與資料庫架構"
+      target_date: "2026-12-15"
+      owner: "alice"
+      architecture_modules:
+        - "API Gateway"
+        - "Registry DB"
+      success_criteria:
+        - "所有核心端點通過整合測試且 P95 延遲 < 200ms"
+        - "架構圖與實際部署元件 100% 一致"
+
+# ---------------------------------------------------------------------------
+# 2. project-hub/team.yaml
+# ---------------------------------------------------------------------------
+team_example:
+  version: 1
+  members:
+    - id: alice
+      name: "Alice"
+      role: "Tech Lead"
+      skills: ["backend", "architecture", "review"]
+      weekly_capacity_hours: 32
+    - id: bob
+      name: "Bob"
+      role: "Engineer"
+      skills: ["python", "testing"]
+      weekly_capacity_hours: 35
+
+# ---------------------------------------------------------------------------
+# 3. project-hub/tasks.yaml
+# ---------------------------------------------------------------------------
+tasks_example:
+  version: 1
+  tasks:
+    - id: T-001
+      title: "設計並實作 SQLite Schema 與遷移腳本"
+      objective_id: OBJ-01
+      architecture_module: "Registry DB"
+      assignee: alice
+      reviewer: bob
+      due_date: "2026-12-05"
+      estimated_hours: 12
+      depends_on: []
+      status: done # todo | in_progress | blocked | in_review | needs_rework | done
+      qa_status: passed # pending | in_review | passed | failed
+      evidence:
+        - "PR #12 merged (commit abc1234)"
+        - "pytest tests/test_db.py -> 18/18 passed"
+      acceptance_criteria:
+        - criterion: "Schema 支援所有計畫書欄位與索引"
+          passed: true
+        - criterion: "單元測試覆蓋率 >= 85%"
+          passed: true
+    - id: T-002
+      title: "實作核心 REST API 與錯誤處理"
+      objective_id: OBJ-01
+      architecture_module: "API Gateway"
+      assignee: bob
+      reviewer: alice
+      due_date: "2026-12-12"
+      estimated_hours: 16
+      depends_on: [T-001]
+      status: in_progress
+      qa_status: pending
+      evidence: []
+      acceptance_criteria:
+        - criterion: "OpenAPI 規格與 ARCHITECTURE.md 一致"
+          passed: false
+        - criterion: "整合測試全部通過"
+          passed: false

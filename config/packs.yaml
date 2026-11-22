@@ -134,7 +134,7 @@ packs:
         url: https://github.com/Imbad0202/academic-research-skills/blob/main/academic-paper/SKILL.md
 
   project-mgmt:
-    description: 全流程專案管理與工作分配助手：涵蓋路線圖排序、Sprint 拆解與進度追蹤、Backlog 分流、依賴與風險控管、人力產能規劃、變革管理、事後檢討與多受眾匯報。
+    description: 全流程專案管理與指揮中心助手：涵蓋完整架構圖與計劃書追蹤、目標↔任務群組映射、時程與依賴檢核、人力產能配置、產出品質硬閘門（QA/DoD）、風險預演與方向校正。
     domain: project_mgmt
     extends:
       - base-office
@@ -143,10 +143,54 @@ packs:
     auto_expand:
       enabled: true
       min_score: 75.0
-      max_skills: 25
+      max_skills: 30
       max_add_per_run: 3
       allow_replace: false
     skills:
+      # 1. 核心專案管理指揮中心（內建：架構圖+計劃書+目標任務映射+時間點+人力負荷+品質硬閘門+自動稽核腳本）
+      - slot: pm:command-center
+        name: project-command-center
+        repo: Disesfgewu/Auto-Skills-Fetcher
+        path: skills/project-command-center/SKILL.md
+        local_path: skills/project-command-center/SKILL.md
+        url: https://github.com/Disesfgewu/Auto-Skills-Fetcher/blob/main/skills/project-command-center/SKILL.md
+      # 2. 架構圖、計劃書/PRD、規格對齊與計畫壓力測試
+      - slot: pm:system-architecture
+        name: senior-architect
+        repo: alirezarezvani/claude-skills
+        path: engineering-team/skills/senior-architect/SKILL.md
+        url: https://github.com/alirezarezvani/claude-skills/blob/main/engineering-team/skills/senior-architect/SKILL.md
+      - slot: pm:project-charter-prd
+        name: prd
+        repo: alirezarezvani/claude-skills
+        path: .gemini/skills/prd/SKILL.md
+        url: https://github.com/alirezarezvani/claude-skills/blob/main/.gemini/skills/prd/SKILL.md
+      - slot: pm:plan-grilling
+        name: plan-grilling
+        repo: borghei/Claude-Skills
+        path: project-management/discovery/plan-grilling/SKILL.md
+        url: https://github.com/borghei/Claude-Skills/blob/main/project-management/discovery/plan-grilling/SKILL.md
+      - slot: pm:pre-mortem
+        name: pre-mortem
+        repo: borghei/Claude-Skills
+        path: project-management/discovery/pre-mortem/SKILL.md
+        url: https://github.com/borghei/Claude-Skills/blob/main/project-management/discovery/pre-mortem/SKILL.md
+      # 3. 目標↔任務群組、OKR、路線圖、時程與專案健康度追蹤
+      - slot: pm:okr-alignment
+        name: okr
+        repo: alirezarezvani/claude-skills
+        path: .gemini/skills/okr/SKILL.md
+        url: https://github.com/alirezarezvani/claude-skills/blob/main/.gemini/skills/okr/SKILL.md
+      - slot: pm:project-health
+        name: project-health
+        repo: alirezarezvani/claude-skills
+        path: .gemini/skills/project-health/SKILL.md
+        url: https://github.com/alirezarezvani/claude-skills/blob/main/.gemini/skills/project-health/SKILL.md
+      - slot: pm:senior-program-pm
+        name: senior-pm
+        repo: alirezarezvani/claude-skills
+        path: project-management/skills/senior-pm/SKILL.md
+        url: https://github.com/alirezarezvani/claude-skills/blob/main/project-management/skills/senior-pm/SKILL.md
       - slot: pm:roadmap-planning
         name: roadmap-planning
         repo: rampstackco/claude-skills
@@ -157,11 +201,6 @@ packs:
         repo: rampstackco/claude-skills
         path: skills/sprint-operations/SKILL.md
         url: https://github.com/rampstackco/claude-skills/blob/main/skills/sprint-operations/SKILL.md
-      - slot: pm:roadmap-communication
-        name: roadmap-communication
-        repo: borghei/Claude-Skills
-        path: project-management/execution/roadmap-communication/SKILL.md
-        url: https://github.com/borghei/Claude-Skills/blob/main/project-management/execution/roadmap-communication/SKILL.md
       - slot: pm:sprint-plan-tracker
         name: sprint-plan
         repo: Donchitos/Claude-Code-Game-Studios
@@ -177,11 +216,7 @@ packs:
         repo: rampstackco/claude-skills
         path: skills/dependency-management/SKILL.md
         url: https://github.com/rampstackco/claude-skills/blob/main/skills/dependency-management/SKILL.md
-      - slot: pm:after-action-report
-        name: after-action-report
-        repo: rampstackco/claude-skills
-        path: skills/after-action-report/SKILL.md
-        url: https://github.com/rampstackco/claude-skills/blob/main/skills/after-action-report/SKILL.md
+      # 4. 人力產能、變革管理與多受眾匯報
       - slot: pm:capacity-planner
         name: capacity-planner
         repo: borghei/Claude-Skills
@@ -192,6 +227,11 @@ packs:
         repo: borghei/Claude-Skills
         path: c-level-advisor/change-management/SKILL.md
         url: https://github.com/borghei/Claude-Skills/blob/main/c-level-advisor/change-management/SKILL.md
+      - slot: pm:roadmap-communication
+        name: roadmap-communication
+        repo: borghei/Claude-Skills
+        path: project-management/execution/roadmap-communication/SKILL.md
+        url: https://github.com/borghei/Claude-Skills/blob/main/project-management/execution/roadmap-communication/SKILL.md
       - slot: pm:project-manager-suite
         name: cs-project-manager
         repo: alirezarezvani/claude-skills
@@ -202,6 +242,22 @@ packs:
         repo: alirezarezvani/claude-skills
         path: .gemini/skills/cs-agile-product-owner/SKILL.md
         url: https://github.com/alirezarezvani/claude-skills/blob/main/.gemini/skills/cs-agile-product-owner/SKILL.md
+      # 5. 產出品質硬閘門（規格驗收、交付管理與事後檢討）
+      - slot: pm:spec-quality-gate
+        name: spec-driven-workflow
+        repo: alirezarezvani/claude-skills
+        path: engineering/skills/spec-driven-workflow/SKILL.md
+        url: https://github.com/alirezarezvani/claude-skills/blob/main/engineering/skills/spec-driven-workflow/SKILL.md
+      - slot: pm:delivery-manager
+        name: delivery-manager
+        repo: borghei/Claude-Skills
+        path: project-management/delivery-manager/SKILL.md
+        url: https://github.com/borghei/Claude-Skills/blob/main/project-management/delivery-manager/SKILL.md
+      - slot: pm:after-action-report
+        name: after-action-report
+        repo: rampstackco/claude-skills
+        path: skills/after-action-report/SKILL.md
+        url: https://github.com/rampstackco/claude-skills/blob/main/skills/after-action-report/SKILL.md
 
   exec-secretary-deck:
     description: 全方位個人秘書與簡報生成助手：涵蓋投影片與董事會簡報設計、視覺主題與品牌規範、圖表與流程圖繪製、文件共筆、行事曆排程、會議紀要、幕僚長協調與內部溝通。

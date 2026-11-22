@@ -55,9 +55,15 @@ def _sync_preset_skills(
     pack_name: str | None = None,
     fetch: bool = False,
     crawler: GitHubCrawler | None = None,
+    packs_config_path: str | Path | None = None,
 ) -> tuple[int, int]:
     """Seed or fetch preset pack skills into the local registry and bundle cache."""
     packs = packs_cfg.get("packs", {})
+    repo_root = (
+        Path(packs_config_path).resolve().parents[1]
+        if packs_config_path
+        else Path.cwd()
+    )
     if pack_name and pack_name != "all":
         resolved = resolve_pack_skills(packs_cfg, pack_name)
         items_with_ctx = [
@@ -87,6 +93,62 @@ def _sync_preset_skills(
         if skill_id in seen_ids:
             continue
         seen_ids.add(skill_id)
+
+        # Support first-party local skills bundled in this repository (works both offline & online)
+        local_rel = item.get("local_path")
+        if local_rel:
+            local_file = Path(local_rel)
+            if not local_file.is_absolute():
+                local_file = repo_root / local_rel
+            if local_file.is_file():
+                raw_md = local_file.read_text(encoding="utf-8")
+                extra_files: dict[str, bytes] = {}
+                for sibling in local_file.parent.rglob("*"):
+                    if sibling.is_file() and sibling != local_file:
+                        extra_files[str(sibling.relative_to(local_file.parent))] = sibling.read_bytes()
+                has_scripts = any(p.startswith("scripts/") for p in extra_files)
+                has_refs = any(
+                    p.startswith("references/") or p.lower().endswith("reference.md")
+                    for p in extra_files
+                )
+                sec = scan_skill_security(
+                    raw_md,
+                    extra_scripts=_extract_script_texts(extra_files),
+                    raw_assets=extra_files,
+                )
+                doc = parse_skill_md(raw_md, has_scripts=has_scripts, has_references=has_refs)
+                rec = SkillRecord(
+                    skill_id=skill_id,
+                    name=item["name"],
+                    description=doc.description,
+                    domain=domain,
+                    repo=item["repo"],
+                    path=item["path"],
+                    url=item.get("url", f"https://github.com/{item['repo']}"),
+                    commit_sha="local-builtin",
+                    content_hash=doc.content_hash,
+                    raw_content=raw_md,
+                    stars=500,
+                    curated_mentions=2,
+                    days_since_update=0,
+                    license_spdx="Apache-2.0",
+                    has_scripts=has_scripts,
+                    has_references=has_refs,
+                    estimated_tokens=doc.estimated_tokens,
+                    security_passed=sec.passed,
+                    slot=item.get("slot"),
+                    is_champion=True,
+                )
+                rec.score = evaluate_skill(rec, doc, config=sources_cfg)
+                reg.upsert_skill(rec)
+                save_skill_bundle(bundle_cache_dir(db_path, skill_id), extra_files)
+                if fetch:
+                    print(
+                        f"  [LOCAL] {item['name']} ({local_rel}) — "
+                        f"{len(raw_md)}B SKILL.md + {len(extra_files)} assets, score={rec.score.total}"
+                    )
+                synced += 1
+                continue
 
         if not fetch:
             stub_md = (
@@ -200,7 +262,12 @@ def _cmd_init(args: argparse.Namespace) -> int:
     reg = SkillRegistry(args.db)
     try:
         synced, failed = _sync_preset_skills(
-            packs_cfg, sources_cfg, reg, args.db, fetch=bool(args.fetch)
+            packs_cfg,
+            sources_cfg,
+            reg,
+            args.db,
+            fetch=bool(args.fetch),
+            packs_config_path=args.packs_config,
         )
         mode = "fetched upstream" if args.fetch else "preset"
         print(f"Initialized registry at {args.db} with {synced} {mode} champion skills.")
@@ -215,7 +282,13 @@ def _cmd_sync(args: argparse.Namespace) -> int:
     reg = SkillRegistry(args.db)
     try:
         synced, failed = _sync_preset_skills(
-            packs_cfg, sources_cfg, reg, args.db, pack_name=args.pack, fetch=True
+            packs_cfg,
+            sources_cfg,
+            reg,
+            args.db,
+            pack_name=args.pack,
+            fetch=True,
+            packs_config_path=args.packs_config,
         )
         print(f"Synced {synced} upstream skills into {args.db} (failed: {failed}).")
         return 1 if failed and synced == 0 else 0
