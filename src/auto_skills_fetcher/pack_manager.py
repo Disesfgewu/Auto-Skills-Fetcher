@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import difflib
 import json
+import os
+import re
 import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -14,6 +16,71 @@ import yaml
 
 from .matcher import cosine_similarity
 from .parser import compute_content_hash
+
+SUPPORTED_AGENTS = ("agy", "claude", "codex")
+
+
+def resolve_agent_targets(
+    agent: str,
+    *,
+    scope: str = "project",
+    project_root: str | Path = ".",
+    home_dir: str | Path | None = None,
+) -> list[tuple[str, Path]]:
+    """Resolve native skill directories for agy, claude, codex, or all (deduplicated)."""
+    if scope not in {"project", "global"}:
+        raise ValueError(f"Unsupported scope '{scope}'. Use 'project' or 'global'.")
+
+    requested = list(SUPPORTED_AGENTS) if agent == "all" else [agent]
+    for ag in requested:
+        if ag not in SUPPORTED_AGENTS:
+            raise ValueError(f"Unsupported agent '{ag}'. Supported: {', '.join(SUPPORTED_AGENTS)}, all.")
+
+    root = Path(project_root).expanduser().resolve()
+    home = Path(home_dir).expanduser().resolve() if home_dir else Path.home()
+
+    if scope == "project":
+        mapping = {
+            "agy": root / ".agents" / "skills",
+            "codex": root / ".agents" / "skills",
+            "claude": root / ".claude" / "skills",
+        }
+    else:
+        mapping = {
+            "agy": home / ".gemini" / "config" / "skills",
+            "claude": home / ".claude" / "skills",
+            "codex": home / ".codex" / "skills",
+        }
+
+    # Deduplicate shared directories (e.g., agy + codex share .agents/skills in project scope)
+    by_path: dict[Path, list[str]] = {}
+    for ag in requested:
+        target = mapping[ag]
+        by_path.setdefault(target, []).append(ag)
+
+    return [(",".join(ags), path) for path, ags in by_path.items()]
+
+
+def bundle_cache_dir(db_path: str | Path, skill_id: str) -> Path:
+    """Return local cache directory storing bundled scripts/references for a skill."""
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "__", skill_id).strip("_")
+    return Path(db_path).parent / "bundles" / safe
+
+
+def save_skill_bundle(bundle_dir: Path, extra_files: dict[str, bytes]) -> None:
+    """Persist fetched sibling files for a skill inside its local bundle cache."""
+    if bundle_dir.exists():
+        shutil.rmtree(bundle_dir)
+    if not extra_files:
+        return
+    bundle_dir.mkdir(parents=True, exist_ok=True)
+    for rel_path, content in extra_files.items():
+        clean_rel = Path(rel_path)
+        if clean_rel.is_absolute() or ".." in clean_rel.parts:
+            continue
+        dest = bundle_dir / clean_rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(content)
 
 
 @dataclass
@@ -144,10 +211,21 @@ class PackManager:
         skill_payloads: list[dict[str, Any]],
         *,
         update_policy: str = "track-with-diff",
+        prune_previous: bool = False,
     ) -> list[CollisionWarning]:
-        """Write resolved skills into target_dir/<skill_name>/SKILL.md and record skills-lock.json."""
+        """Write resolved skills (plus bundled assets) into target_dir/<name>/ and record lockfile."""
         self.target_dir.mkdir(parents=True, exist_ok=True)
         lock = self._read_lock()
+        previous_managed = set(lock.get("skills", {}).keys())
+        incoming_names = {item["name"] for item in skill_payloads}
+
+        if prune_previous:
+            for old_name in sorted(previous_managed - incoming_names):
+                old_dir = self.target_dir / old_name
+                if old_dir.is_dir():
+                    shutil.rmtree(old_dir)
+                lock.get("skills", {}).pop(old_name, None)
+
         lock["pack"] = pack_name
         lock["update_policy"] = update_policy
         now = datetime.now(timezone.utc).isoformat()
@@ -160,12 +238,29 @@ class PackManager:
             skill_dir.mkdir(parents=True, exist_ok=True)
             (skill_dir / "SKILL.md").write_text(content, encoding="utf-8")
 
+            bundled_count = 0
+            bundle_dir_raw = item.get("bundle_dir")
+            if bundle_dir_raw:
+                bdir = Path(bundle_dir_raw)
+                if bdir.is_dir():
+                    for src_file in bdir.rglob("*"):
+                        if not src_file.is_file():
+                            continue
+                        rel = src_file.relative_to(bdir)
+                        dest_file = skill_dir / rel
+                        dest_file.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(src_file, dest_file)
+                        if dest_file.suffix == ".sh":
+                            os.chmod(dest_file, 0o755)
+                        bundled_count += 1
+
             lock["skills"][name] = {
                 "slot": item.get("slot"),
                 "repo": item.get("repo", ""),
                 "path": item.get("path", ""),
                 "commit_sha": item.get("commit_sha", ""),
                 "content_hash": compute_content_hash(content),
+                "bundled_files": bundled_count,
                 "state": "pinned" if update_policy == "pinned" else "tracked",
                 "installed_at": now,
             }

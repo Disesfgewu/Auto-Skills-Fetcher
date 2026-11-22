@@ -15,7 +15,9 @@ from auto_skills_fetcher.pack_manager import (
     build_semantic_diff,
     detect_trigger_collisions,
     load_yaml_config,
+    resolve_agent_targets,
     resolve_pack_skills,
+    save_skill_bundle,
 )
 from auto_skills_fetcher.parser import SkillParseError, parse_skill_md
 from auto_skills_fetcher.registry import SkillRegistry
@@ -234,6 +236,79 @@ class TestAutoSkillsFetcher(unittest.TestCase):
                 self.assertEqual(reg.stats()["champions"], 15)
             finally:
                 reg.close()
+
+    def test_multi_agent_targets_bundles_and_safe_prune(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "proj"
+            home = Path(tmp) / "home"
+            proj_targets = resolve_agent_targets("all", scope="project", project_root=root, home_dir=home)
+            self.assertEqual(len(proj_targets), 2)
+            self.assertEqual(proj_targets[0], ("agy,codex", (root / ".agents" / "skills").resolve()))
+            self.assertEqual(proj_targets[1], ("claude", (root / ".claude" / "skills").resolve()))
+
+            global_targets = resolve_agent_targets("all", scope="global", project_root=root, home_dir=home)
+            self.assertEqual(len(global_targets), 3)
+            self.assertEqual(
+                [label for label, _ in global_targets],
+                ["agy", "claude", "codex"],
+            )
+
+            # Pre-existing unmanaged user skill must never be deleted on prune
+            skills_dir = root / ".agents" / "skills"
+            user_skill = skills_dir / "agent-eye" / "SKILL.md"
+            user_skill.parent.mkdir(parents=True, exist_ok=True)
+            user_skill.write_text("# user owned", encoding="utf-8")
+
+            bdir = Path(tmp) / "bundle_pdf"
+            save_skill_bundle(bdir, {"REFERENCE.md": b"# Ref", "scripts/run.sh": b"#!/bin/sh\necho ok\n"})
+
+            mgr = PackManager(skills_dir)
+            mgr.assemble(
+                "pack-a",
+                [
+                    {
+                        "name": "pdf",
+                        "description": "PDF tools",
+                        "slot": "base:pdf",
+                        "repo": "anthropics/skills",
+                        "path": "skills/pdf/SKILL.md",
+                        "commit_sha": "sha1",
+                        "raw_content": GOOD_ACADEMIC_SKILL,
+                        "bundle_dir": str(bdir),
+                    },
+                    {
+                        "name": "old-skill",
+                        "description": "Old skill",
+                        "slot": "old:slot",
+                        "repo": "org/repo",
+                        "path": "old/SKILL.md",
+                        "commit_sha": "sha0",
+                        "raw_content": WEAK_ACADEMIC_SKILL,
+                    },
+                ],
+            )
+            self.assertTrue((skills_dir / "pdf" / "REFERENCE.md").exists())
+            self.assertTrue((skills_dir / "pdf" / "scripts" / "run.sh").exists())
+
+            # Switch to pack-b with prune_previous=True -> old-skill removed, agent-eye preserved
+            mgr.assemble(
+                "pack-b",
+                [
+                    {
+                        "name": "pdf",
+                        "description": "PDF tools",
+                        "slot": "base:pdf",
+                        "repo": "anthropics/skills",
+                        "path": "skills/pdf/SKILL.md",
+                        "commit_sha": "sha1",
+                        "raw_content": GOOD_ACADEMIC_SKILL,
+                        "bundle_dir": str(bdir),
+                    }
+                ],
+                prune_previous=True,
+            )
+            self.assertFalse((skills_dir / "old-skill").exists())
+            self.assertTrue(user_skill.exists())
 
 
 if __name__ == "__main__":

@@ -24,28 +24,42 @@ Automated discovery, security auditing, 5-dimension scoring, Champion–Challeng
 # Install in editable mode
 pip install -e .
 
-# Initialize local SQLite registry from preset packs
-skillpack init
+# Sync full upstream SKILL.md + scripts/references for all preset packs (uses GITHUB_TOKEN if set)
+export GITHUB_TOKEN="ghp_your_token"
+skillpack sync
 
 # Check system status and configured packs
 skillpack status
 
-# Crawl GitHub for a domain (requires GITHUB_TOKEN for live API calls)
-export GITHUB_TOKEN="ghp_your_token"
+# Crawl GitHub for additional domain candidates
 skillpack crawl --domain academic --dry-run
+skillpack crawl --domain academic
 
 # Run Champion-Challenger recommendations against local registry
 skillpack recommend --domain academic
 
-# Assemble a skill pack into a target .skills directory (with collision check)
-skillpack assemble --pack academic-research --target ./.skills/academic
+# Assemble a skill pack directly for agy, claude, and codex (project or global scope)
+skillpack assemble --pack academic-research --agent all --scope project --fetch --prune
+# Switch pack cleanly (removes only skillpack-managed skills from the previous pack)
+skillpack assemble --pack exec-secretary-deck --agent all --scope project --fetch --prune
+
+# Or install into a custom directory
+skillpack assemble --pack academic-research --target ./.skills/academic --fetch
 
 # Inspect updates with semantic diff and selectively replace or keep
-skillpack update --pack project-mgmt --strategy interactive
+skillpack update --target ./.agents/skills --skill sprint-operations --incoming ./new/SKILL.md --decision interactive
 
 # Roll back a skill to its previous backup
-skillpack rollback --pack project-mgmt --skill sprint-operations
+skillpack rollback --target ./.agents/skills --skill sprint-operations
 ```
+
+## Multi-Agent Target Paths (`--agent`)
+
+| Agent | `--scope project` | `--scope global` |
+| :--- | :--- | :--- |
+| `agy` (Antigravity) | `<project>/.agents/skills/` | `~/.gemini/config/skills/` |
+| `claude` (Claude Code) | `<project>/.claude/skills/` | `~/.claude/skills/` |
+| `codex` (OpenAI Codex) | `<project>/.agents/skills/` | `~/.codex/skills/` |
 
 ## Running Tests
 
