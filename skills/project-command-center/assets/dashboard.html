@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Project Command Center — 專案管理與人力分配儀表板</title>
+  <title>Project Command Center — 互動式 PM 助手（agy / Claude Code / Codex）</title>
   <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js" defer></script>
   <style>
     :root {
@@ -26,177 +26,207 @@
       background: var(--bg);
       color: var(--text);
       line-height: 1.5;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
     header {
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      background: rgba(11, 17, 32, 0.92);
-      backdrop-filter: blur(10px);
+      background: rgba(11, 17, 32, 0.96);
       border-bottom: 1px solid var(--border);
-      padding: 14px 24px;
+      padding: 10px 20px;
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      gap: 10px;
+      flex-shrink: 0;
     }
     .brand { display: flex; align-items: center; gap: 12px; }
-    .brand h1 { margin: 0; font-size: 18px; font-weight: 700; }
-    .brand .sub { font-size: 12px; color: var(--muted); }
-    .rag-badge {
-      padding: 4px 12px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-    }
+    .brand h1 { margin: 0; font-size: 16px; font-weight: 700; }
+    .brand .sub { font-size: 11px; color: var(--muted); }
+    .rag-badge { padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; }
     .rag-GREEN { background: rgba(34, 197, 94, 0.18); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.45); }
     .rag-AMBER { background: rgba(245, 158, 11, 0.18); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.45); }
     .rag-RED { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.5); }
     .sync-pill {
       display: inline-flex; align-items: center; gap: 6px;
-      font-size: 12px; color: var(--muted);
+      font-size: 11px; color: var(--muted);
       background: var(--surface); border: 1px solid var(--border);
       padding: 4px 10px; border-radius: 999px;
     }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
-    main { max-width: 1380px; margin: 0 auto; padding: 20px 24px 60px; }
-    .kpi-grid {
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+    /* Split-screen workspace: Left Visual Board + Right Interactive Assistant */
+    .workspace {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-      gap: 14px;
-      margin-bottom: 20px;
+      grid-template-columns: minmax(0, 1.55fr) minmax(350px, 0.95fr);
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
     }
-    .kpi {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 14px 16px;
+    @media (max-width: 980px) {
+      body { height: auto; overflow: auto; }
+      .workspace { grid-template-columns: 1fr; overflow: visible; }
+      .chat-pane { height: 70vh; border-left: none; border-top: 1px solid var(--border); }
     }
-    .kpi .label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
-    .kpi .value { font-size: 26px; font-weight: 700; }
-    .kpi .hint { font-size: 12px; color: var(--muted); margin-top: 2px; }
-    .tabs {
-      display: flex; flex-wrap: wrap; gap: 8px;
-      margin-bottom: 18px;
+    .board-pane {
+      overflow-y: auto;
+      padding: 16px 20px 40px;
+      min-height: 0;
+    }
+    .chat-pane {
+      display: flex;
+      flex-direction: column;
+      border-left: 1px solid var(--border);
+      background: #0d1424;
+      min-height: 0;
+    }
+    .chat-header {
+      padding: 12px 14px;
       border-bottom: 1px solid var(--border);
-      padding-bottom: 10px;
-    }
-    .tab-btn {
       background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .chat-header-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .engine-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+    .engine-btn {
+      background: var(--bg);
       color: var(--muted);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 14px;
-      font-size: 13px;
+      border-radius: 7px;
+      padding: 5px 10px;
+      font-size: 12px;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
     }
-    .tab-btn:hover { color: var(--text); border-color: var(--accent); }
+    .engine-btn.active { background: rgba(56, 189, 248, 0.16); color: var(--accent); border-color: var(--accent); }
+    .engine-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .quick-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--border); background: rgba(17, 24, 39, 0.6); }
+    .chip {
+      background: var(--surface-2); color: #cbd5e1;
+      border: 1px solid var(--border); border-radius: 999px;
+      padding: 4px 10px; font-size: 11px; cursor: pointer;
+    }
+    .chip:hover { border-color: var(--accent); color: var(--accent); }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .msg {
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-width: 95%;
+    }
+    .msg-user {
+      align-self: flex-end;
+      background: rgba(56, 189, 248, 0.18);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      color: #e0f2fe;
+    }
+    .msg-assistant {
+      align-self: flex-start;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .msg-meta { font-size: 10px; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
+    .chat-input-area {
+      padding: 10px 12px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+    .chat-input-area textarea {
+      flex: 1;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-family: inherit;
+      resize: none;
+      min-height: 42px;
+      max-height: 120px;
+    }
+    .send-btn {
+      background: var(--accent);
+      color: #082f49;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .send-btn:disabled { opacity: 0.5; cursor: wait; }
+
+    /* Visual Board styles */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+    .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 11px 13px; }
+    .kpi .label { font-size: 11px; color: var(--muted); }
+    .kpi .value { font-size: 22px; font-weight: 700; }
+    .kpi .hint { font-size: 11px; color: var(--muted); }
+    .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .tab-btn {
+      background: var(--surface); color: var(--muted);
+      border: 1px solid var(--border); border-radius: 7px;
+      padding: 6px 11px; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
     .tab-btn.active { background: rgba(56, 189, 248, 0.15); color: var(--accent); border-color: var(--accent); }
     .panel { display: none; }
     .panel.active { display: block; }
-    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; }
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 16px 18px;
-      margin-bottom: 16px;
-    }
-    .card h2 { margin: 0 0 12px; font-size: 15px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-    .bar-track { width: 100%; height: 10px; background: var(--surface-2); border-radius: 999px; overflow: hidden; margin: 8px 0; }
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+    .card h2 { margin: 0 0 10px; font-size: 14px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .bar-track { width: 100%; height: 9px; background: var(--surface-2); border-radius: 999px; overflow: hidden; margin: 6px 0; }
     .bar-fill { height: 100%; border-radius: 999px; transition: width 0.3s ease; }
     .fill-green { background: linear-gradient(90deg, #16a34a, #4ade80); }
     .fill-amber { background: linear-gradient(90deg, #d97706, #fbbf24); }
     .fill-red { background: linear-gradient(90deg, #dc2626, #f87171); }
     .fill-blue { background: linear-gradient(90deg, #0284c7, #38bdf8); }
-    .tag {
-      display: inline-block; padding: 2px 8px; border-radius: 6px;
-      font-size: 11px; font-weight: 600; margin-right: 4px;
-      background: var(--surface-2); color: var(--muted); border: 1px solid var(--border);
-    }
-    .st-done { background: rgba(34, 197, 94, 0.15); color: #4ade80; border-color: rgba(34, 197, 94, 0.35); }
+    .tag { display: inline-block; padding: 2px 7px; border-radius: 5px; font-size: 11px; font-weight: 600; margin-right: 4px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+    .st-done, .st-passed { background: rgba(34, 197, 94, 0.15); color: #4ade80; border-color: rgba(34, 197, 94, 0.35); }
     .st-in_progress { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border-color: rgba(56, 189, 248, 0.35); }
     .st-in_review { background: rgba(167, 139, 250, 0.15); color: #c4b5fd; border-color: rgba(167, 139, 250, 0.35); }
     .st-blocked, .st-needs_rework, .st-failed { background: rgba(239, 68, 68, 0.18); color: #f87171; border-color: rgba(239, 68, 68, 0.4); }
     .st-todo, .st-pending { background: rgba(148, 163, 184, 0.14); color: #cbd5e1; border-color: rgba(148, 163, 184, 0.3); }
-    .st-passed { background: rgba(34, 197, 94, 0.15); color: #4ade80; border-color: rgba(34, 197, 94, 0.35); }
-    .member-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 16px;
-    }
-    .member-card.overload { border-color: rgba(239, 68, 68, 0.65); box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.25); }
+    .member-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+    .member-card.overload { border-color: rgba(239, 68, 68, 0.65); }
     .member-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-    .member-name { font-size: 16px; font-weight: 700; }
-    .member-role { font-size: 12px; color: var(--muted); }
-    .task-row {
-      background: var(--surface-2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px 12px;
-      margin-top: 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .task-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .task-title { font-weight: 600; font-size: 13px; }
+    .task-row { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-top: 7px; display: flex; flex-direction: column; gap: 5px; }
+    .task-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap; }
     .task-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-    select, input[type="date"] {
-      background: var(--bg);
-      color: var(--text);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 3px 6px;
-      font-size: 12px;
-    }
-    .alert {
-      padding: 10px 12px;
-      border-radius: 8px;
-      margin-bottom: 8px;
-      font-size: 13px;
-    }
+    select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 5px; padding: 2px 6px; font-size: 11px; }
+    .alert { padding: 8px 10px; border-radius: 7px; margin-bottom: 7px; font-size: 12px; }
     .alert-red { background: rgba(239, 68, 68, 0.14); border: 1px solid rgba(239, 68, 68, 0.45); color: #fecaca; }
     .alert-amber { background: rgba(245, 158, 11, 0.14); border: 1px solid rgba(245, 158, 11, 0.45); color: #fde68a; }
     .alert-green { background: rgba(34, 197, 94, 0.14); border: 1px solid rgba(34, 197, 94, 0.4); color: #bbf7d0; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
-    th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
-    .gantt-row { display: grid; grid-template-columns: 230px 1fr 90px; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
-    .gantt-track { position: relative; height: 22px; background: var(--surface-2); border-radius: 6px; overflow: hidden; }
-    .gantt-bar { position: absolute; top: 3px; height: 16px; border-radius: 4px; font-size: 10px; padding: 0 6px; line-height: 16px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--muted); font-size: 10px; text-transform: uppercase; }
+    .gantt-row { display: grid; grid-template-columns: 190px 1fr 78px; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 11px; }
+    .gantt-track { position: relative; height: 20px; background: var(--surface-2); border-radius: 5px; overflow: hidden; }
+    .gantt-bar { position: absolute; top: 3px; height: 14px; border-radius: 3px; font-size: 10px; padding: 0 5px; line-height: 14px; color: #fff; white-space: nowrap; overflow: hidden; }
     .gantt-today { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--red); z-index: 2; }
-    pre.doc-box {
-      white-space: pre-wrap;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 14px;
-      font-size: 13px;
-      color: #cbd5e1;
-      max-height: 560px;
-      overflow: auto;
-    }
-    .mermaid-wrap {
-      background: #0f172a;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 14px;
-      overflow: auto;
-      margin-bottom: 12px;
-    }
-    .filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; align-items: center; }
-    .toast {
-      position: fixed; bottom: 20px; right: 20px;
-      background: #0ea5e9; color: #082f49; font-weight: 700;
-      padding: 10px 16px; border-radius: 8px; font-size: 13px;
-      display: none; z-index: 50;
-    }
+    pre.doc-box { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 12px; color: #cbd5e1; max-height: 420px; overflow: auto; }
+    .mermaid-wrap { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow: auto; margin-bottom: 10px; }
+    .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
   </style>
 </head>
 <body>
@@ -208,85 +238,68 @@
       </div>
       <span id="rag-badge" class="rag-badge rag-GREEN">GREEN</span>
     </div>
-    <div style="display:flex; gap:10px; align-items:center;">
-      <span class="sync-pill"><span class="dot"></span><span id="sync-status">Live sync (3s)</span></span>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <span class="sync-pill"><span class="dot"></span><span id="sync-status">Live sync</span></span>
       <button class="tab-btn" onclick="refreshState(true)">重新整理</button>
     </div>
   </header>
 
-  <main>
-    <section class="kpi-grid" id="kpi-grid"></section>
+  <div class="workspace">
+    <!-- LEFT: LIVE VISUAL BOARD -->
+    <div class="board-pane">
+      <section class="kpi-grid" id="kpi-grid"></section>
 
-    <div class="tabs">
-      <button class="tab-btn active" data-tab="workforce" onclick="switchTab('workforce')">👥 人力分配與工作負荷</button>
-      <button class="tab-btn" data-tab="objectives" onclick="switchTab('objectives')">🎯 目標↔任務群組與時間軸</button>
-      <button class="tab-btn" data-tab="qa" onclick="switchTab('qa')">✅ 產出品質硬閘門與風險警示</button>
-      <button class="tab-btn" data-tab="arch" onclick="switchTab('arch')">🗺️ 完整架構圖與計劃書</button>
-    </div>
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="workforce" onclick="switchTab('workforce')">👥 人力分配與負荷</button>
+        <button class="tab-btn" data-tab="objectives" onclick="switchTab('objectives')">🎯 目標↔任務與時間軸</button>
+        <button class="tab-btn" data-tab="qa" onclick="switchTab('qa')">✅ 品質硬閘門與風險</button>
+        <button class="tab-btn" data-tab="arch" onclick="switchTab('arch')">🗺️ 架構圖與計劃書</button>
+      </div>
 
-    <section id="panel-workforce" class="panel active">
-      <div class="filters">
-        <label style="font-size:12px;color:var(--muted)">篩選目標：
-          <select id="filter-obj" onchange="renderAll()"><option value="">全部目標</option></select>
-        </label>
-        <label style="font-size:12px;color:var(--muted)">篩選狀態：
-          <select id="filter-status" onchange="renderAll()">
-            <option value="">全部狀態</option>
-            <option value="todo">todo</option>
-            <option value="in_progress">in_progress</option>
-            <option value="blocked">blocked</option>
-            <option value="in_review">in_review</option>
-            <option value="needs_rework">needs_rework</option>
-            <option value="done">done</option>
-          </select>
-        </label>
-        <span style="font-size:12px;color:var(--muted)">💡 可直接在下方任務卡片改派負責人或狀態，即時寫回 <code>tasks.yaml</code> 並重算負荷</span>
-      </div>
-      <div id="workforce-alerts"></div>
-      <div class="grid-2" id="workforce-grid"></div>
-      <div class="card" id="unassigned-card" style="display:none;margin-top:16px;">
-        <h2>⚠️ 未指派任務</h2>
-        <div id="unassigned-list"></div>
-      </div>
-    </section>
-
-    <section id="panel-objectives" class="panel">
-      <div id="objectives-list"></div>
-      <div class="card">
-        <h2>📅 任務時間軸與截止日檢核（紅線 = 今日）</h2>
-        <div id="gantt-container"></div>
-      </div>
-    </section>
-
-    <section id="panel-qa" class="panel">
-      <div class="card">
-        <h2>🚨 專案健康度與品質稽核警訊</h2>
-        <div id="audit-alerts"></div>
-      </div>
-      <div class="card">
-        <h2>📋 任務產出品質檢核表（Acceptance Criteria & Evidence）</h2>
-        <div style="overflow:auto;">
-          <table>
-            <thead>
-              <tr>
-                <th>任務</th>
-                <th>對應目標</th>
-                <th>負責人</th>
-                <th>狀態 / QA</th>
-                <th>驗收標準（Acceptance Criteria）</th>
-                <th>驗證證據（Evidence）</th>
-              </tr>
-            </thead>
-            <tbody id="qa-table-body"></tbody>
-          </table>
+      <section id="panel-workforce" class="panel active">
+        <div class="filters">
+          <label style="font-size:11px;color:var(--muted)">目標：<select id="filter-obj" onchange="renderAll()"><option value="">全部</option></select></label>
+          <label style="font-size:11px;color:var(--muted)">狀態：
+            <select id="filter-status" onchange="renderAll()">
+              <option value="">全部</option>
+              <option value="todo">todo</option><option value="in_progress">in_progress</option>
+              <option value="blocked">blocked</option><option value="in_review">in_review</option>
+              <option value="needs_rework">needs_rework</option><option value="done">done</option>
+            </select>
+          </label>
         </div>
-      </div>
-    </section>
+        <div id="workforce-alerts"></div>
+        <div class="grid-2" id="workforce-grid"></div>
+        <div class="card" id="unassigned-card" style="display:none;margin-top:12px;">
+          <h2>⚠️ 未指派任務</h2>
+          <div id="unassigned-list"></div>
+        </div>
+      </section>
 
-    <section id="panel-arch" class="panel">
-      <div class="grid-2">
+      <section id="panel-objectives" class="panel">
+        <div id="objectives-list"></div>
         <div class="card">
-          <h2>🗺️ 專案完整架構圖（ARCHITECTURE.md）</h2>
+          <h2>📅 任務時間軸（紅線 = 今日）</h2>
+          <div id="gantt-container"></div>
+        </div>
+      </section>
+
+      <section id="panel-qa" class="panel">
+        <div class="card"><h2>🚨 健康度與品質稽核警訊</h2><div id="audit-alerts"></div></div>
+        <div class="card">
+          <h2>📋 產出品質檢核表（Acceptance Criteria & Evidence）</h2>
+          <div style="overflow:auto;">
+            <table>
+              <thead><tr><th>任務</th><th>目標</th><th>負責人</th><th>狀態/QA</th><th>驗收標準</th><th>驗證證據</th></tr></thead>
+              <tbody id="qa-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="panel-arch" class="panel">
+        <div class="card">
+          <h2>🗺️ 完整架構圖（ARCHITECTURE.md）</h2>
           <div id="mermaid-container"></div>
           <pre class="doc-box" id="arch-doc"></pre>
         </div>
@@ -294,18 +307,53 @@
           <h2>📑 專案計劃書（CHARTER.md）</h2>
           <pre class="doc-box" id="charter-doc"></pre>
         </div>
-      </div>
-    </section>
-  </main>
+      </section>
+    </div>
 
-  <div class="toast" id="toast">已更新 tasks.yaml</div>
+    <!-- RIGHT: INTERACTIVE AI PM ASSISTANT POWERED BY AGY / CLAUDE CODE / CODEX -->
+    <aside class="chat-pane">
+      <div class="chat-header">
+        <div class="chat-header-top">
+          <strong style="font-size:14px;">🤖 互動式 PM 助手</strong>
+          <button class="tab-btn" style="padding:3px 8px;font-size:11px;" onclick="resetChat()">新對話</button>
+        </div>
+        <div class="engine-pills" id="engine-pills">
+          <button class="engine-btn" data-agent="agy" onclick="selectAgent('agy')">⚡ Antigravity (agy)</button>
+          <button class="engine-btn" data-agent="claude" onclick="selectAgent('claude')">🟣 Claude Code</button>
+          <button class="engine-btn" data-agent="codex" onclick="selectAgent('codex')">🟢 Codex</button>
+        </div>
+      </div>
+
+      <div class="quick-chips">
+        <button class="chip" onclick="quickAsk('請根據 project-hub/ 健檢目前專案方向、時間進度、架構圖與計劃書，列出紅黃綠燈風險與建議。')">🔍 健檢進度與方向</button>
+        <button class="chip" onclick="quickAsk('請分析目前每位成員的工作負荷與每週產能，找出超載或閒置人力並提出具體改派方案；若明顯超載請直接調整 tasks.yaml 平衡人力。')">⚖️ 平衡人力負荷</button>
+        <button class="chip" onclick="quickAsk('請執行產出品質硬閘門審查，檢查所有任務的 acceptance_criteria、qa_status 與 evidence 是否達標。')">✅ 審查產出品質</button>
+        <button class="chip" onclick="quickAsk('請核對 ARCHITECTURE.md 架構模組與 objectives.yaml 目標，確認是否有缺少任務或架構偏移。')">🗺️ 核對架構與目標</button>
+      </div>
+
+      <div class="chat-messages" id="chat-messages">
+        <div class="msg msg-assistant">
+          <div class="msg-meta">系統提示</div>
+          已連接本機 CLI 引擎！你可以在上方切換 <strong>Antigravity (agy)</strong>、<strong>Claude Code</strong> 或 <strong>Codex</strong>，直接對助手下達任務派發、人力平衡、時程檢查或品質驗收指令；助手修改 <code>project-hub/</code> 後，左側視覺化看板會即時更新。
+        </div>
+      </div>
+
+      <div class="chat-input-area">
+        <textarea id="chat-input" placeholder="直接對 PM 助手下指令（Enter 送出，Shift+Enter 換行）..." onkeydown="handleChatKey(event)"></textarea>
+        <button class="send-btn" id="send-btn" onclick="sendChat()">送出</button>
+      </div>
+    </aside>
+  </div>
 
   <script>
     let STATE = null;
-    let LAST_ARCH_HASH = "";
+    let ACTIVE_AGENT = 'agy';
+    let SENDING = false;
+    let LAST_ARCH_HASH = '';
+    let LAST_MSG_COUNT = -1;
 
     function esc(s) {
-      return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+      return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     }
 
     function switchTab(name) {
@@ -314,26 +362,84 @@
       if (name === 'arch') renderMermaid();
     }
 
-    function showToast(msg) {
-      const el = document.getElementById('toast');
-      el.textContent = msg;
-      el.style.display = 'block';
-      setTimeout(() => { el.style.display = 'none'; }, 2200);
+    function selectAgent(agent) {
+      ACTIVE_AGENT = agent;
+      document.querySelectorAll('.engine-btn').forEach(b => b.classList.toggle('active', b.dataset.agent === agent));
+    }
+
+    function handleChatKey(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChat();
+      }
+    }
+
+    function quickAsk(text) {
+      document.getElementById('chat-input').value = text;
+      sendChat();
+    }
+
+    async function resetChat() {
+      await fetch('/api/chat/reset', { method: 'POST' });
+      LAST_MSG_COUNT = -1;
+      await refreshState(true);
+    }
+
+    async function sendChat() {
+      if (SENDING) return;
+      const input = document.getElementById('chat-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      SENDING = true;
+      input.value = '';
+      const btn = document.getElementById('send-btn');
+      btn.disabled = true;
+      btn.textContent = '思考中...';
+
+      const box = document.getElementById('chat-messages');
+      box.insertAdjacentHTML('beforeend', `
+        <div class="msg msg-user"><div class="msg-meta">你 -> ${esc(ACTIVE_AGENT)}</div>${esc(text)}</div>
+        <div class="msg msg-assistant" id="pending-msg"><div class="msg-meta">🤖 ${esc(ACTIVE_AGENT)} 執行中...</div>正在讀取 project-hub/ 並執行分析與調整，請稍候...</div>
+      `);
+      box.scrollTop = box.scrollHeight;
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text, agent: ACTIVE_AGENT })
+        });
+        const data = await res.json();
+        const pending = document.getElementById('pending-msg');
+        if (pending) pending.remove();
+        if (data.state) {
+          STATE = data.state;
+          LAST_MSG_COUNT = -1;
+          renderAll(true);
+        } else {
+          await refreshState(true);
+          if (!data.ok && data.error) {
+            box.insertAdjacentHTML('beforeend', `<div class="msg msg-assistant"><div class="msg-meta">錯誤</div>${esc(data.error)}</div>`);
+          }
+        }
+      } catch (err) {
+        const pending = document.getElementById('pending-msg');
+        if (pending) pending.textContent = '請求失敗: ' + err.message;
+      } finally {
+        SENDING = false;
+        btn.disabled = false;
+        btn.textContent = '送出';
+      }
     }
 
     async function updateTaskField(taskId, patch) {
-      try {
-        const res = await fetch('/api/tasks/update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ task_id: taskId, ...patch })
-        });
-        if (!res.ok) throw new Error('Update failed');
-        showToast(`已更新 ${taskId}`);
-        await refreshState(true);
-      } catch (e) {
-        alert('更新失敗: ' + e.message);
-      }
+      const res = await fetch('/api/tasks/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: taskId, ...patch })
+      });
+      if (res.ok) await refreshState(true);
     }
 
     async function refreshState(force = false) {
@@ -342,8 +448,8 @@
         STATE = await res.json();
         document.getElementById('sync-status').textContent = '已同步 ' + new Date().toLocaleTimeString();
         renderAll(force);
-      } catch (e) {
-        document.getElementById('sync-status').textContent = '連線中斷，重試中...';
+      } catch (_) {
+        document.getElementById('sync-status').textContent = '重連中...';
       }
     }
 
@@ -353,35 +459,60 @@
       const tasks = STATE.tasks || [];
       const objectives = STATE.objectives || [];
       const members = STATE.team || [];
+      const assistant = STATE.assistant || {};
+
+      // Sync available engines
+      if (assistant.active_agent && LAST_MSG_COUNT === -1) {
+        ACTIVE_AGENT = assistant.active_agent;
+      }
+      const avail = assistant.available_agents || {};
+      document.querySelectorAll('.engine-btn').forEach(b => {
+        const ag = b.dataset.agent;
+        b.disabled = avail[ag] === false;
+        b.classList.toggle('active', ag === ACTIVE_AGENT);
+      });
+
+      // Render chat messages when changed (and not mid-send)
+      const msgs = assistant.messages || [];
+      if (!SENDING && msgs.length !== LAST_MSG_COUNT) {
+        LAST_MSG_COUNT = msgs.length;
+        const box = document.getElementById('chat-messages');
+        if (msgs.length > 0) {
+          box.innerHTML = msgs.map(m => `
+            <div class="msg msg-${m.role === 'user' ? 'user' : 'assistant'}">
+              <div class="msg-meta">${m.role === 'user' ? '你 -> ' + esc(m.agent || '') : '🤖 ' + esc(m.agent || '')}</div>
+              ${esc(m.content || '')}
+            </div>
+          `).join('');
+          box.scrollTop = box.scrollHeight;
+        }
+      }
 
       document.getElementById('project-title').textContent = STATE.project_name || 'Project Command Center';
-      document.getElementById('hub-path').textContent = 'Hub: ' + (STATE.hub_path || './project-hub') + ' | 稽核基準日: ' + (audit.as_of || '');
+      document.getElementById('hub-path').textContent = 'Hub: ' + (STATE.hub_path || '') + ' | 基準日: ' + (audit.as_of || '');
       const rag = audit.rag_status || 'GREEN';
       const badge = document.getElementById('rag-badge');
       badge.textContent = 'RAG: ' + rag;
       badge.className = 'rag-badge rag-' + rag;
 
-      // Populate objective filter once
       const objSel = document.getElementById('filter-obj');
       const curObj = objSel.value;
-      objSel.innerHTML = '<option value="">全部目標</option>' + objectives.map(o => `<option value="${esc(o.id)}">${esc(o.id)} — ${esc(o.title)}</option>`).join('');
+      objSel.innerHTML = '<option value="">全部</option>' + objectives.map(o => `<option value="${esc(o.id)}">${esc(o.id)} — ${esc(o.title)}</option>`).join('');
       objSel.value = curObj;
 
-      // KPIs
       const verifiedDone = tasks.filter(t => t.status === 'done' && t.qa_status === 'passed').length;
       const activeOpen = tasks.filter(t => t.status !== 'done').length;
       const redCount = (audit.red_issues || []).length;
       const amberCount = (audit.amber_issues || []).length;
       const maxUtil = (audit.workload || []).reduce((m, w) => Math.max(m, w.utilization_pct || 0), 0);
       const avgObjPct = (audit.objectives || []).length
-        ? Math.round((audit.objectives || []).reduce((s, o) => s + (o.completion_pct || 0), 0) / audit.objectives.length)
-        : 0;
+        ? Math.round((audit.objectives || []).reduce((s, o) => s + (o.completion_pct || 0), 0) / audit.objectives.length) : 0;
 
       document.getElementById('kpi-grid').innerHTML = `
-        <div class="kpi"><div class="label">目標總達成率</div><div class="value" style="color:var(--accent)">${avgObjPct}%</div><div class="hint">${objectives.length} 個專案目標</div></div>
-        <div class="kpi"><div class="label">已通過 QA 任務</div><div class="value" style="color:var(--green)">${verifiedDone} / ${tasks.length}</div><div class="hint">尚有 ${activeOpen} 個進行/待辦</div></div>
-        <div class="kpi"><div class="label">最高人力負荷</div><div class="value" style="color:${maxUtil > 100 ? 'var(--red)' : (maxUtil >= 80 ? 'var(--amber)' : 'var(--green)')}">${maxUtil}%</div><div class="hint">${members.length} 位團隊成員</div></div>
-        <div class="kpi"><div class="label">紅燈阻礙 / 黃燈預警</div><div class="value" style="color:${redCount ? 'var(--red)' : 'var(--green)'}">${redCount} <span style="font-size:16px;color:var(--amber)">/ ${amberCount}</span></div><div class="hint">漂移 / 逾期 / 品質閘門</div></div>
+        <div class="kpi"><div class="label">目標總達成率</div><div class="value" style="color:var(--accent)">${avgObjPct}%</div><div class="hint">${objectives.length} 個目標</div></div>
+        <div class="kpi"><div class="label">QA 驗證完成</div><div class="value" style="color:var(--green)">${verifiedDone} / ${tasks.length}</div><div class="hint">${activeOpen} 進行/待辦</div></div>
+        <div class="kpi"><div class="label">最高人力負荷</div><div class="value" style="color:${maxUtil > 100 ? 'var(--red)' : (maxUtil >= 80 ? 'var(--amber)' : 'var(--green)')}">${maxUtil}%</div><div class="hint">${members.length} 位成員</div></div>
+        <div class="kpi"><div class="label">紅燈 / 黃燈</div><div class="value" style="color:${redCount ? 'var(--red)' : 'var(--green)'}">${redCount} <span style="font-size:14px;color:var(--amber)">/ ${amberCount}</span></div><div class="hint">方向/時程/品質</div></div>
       `;
 
       renderWorkforce(members, tasks, audit);
@@ -396,30 +527,28 @@
       const filtered = tasks.filter(t => (!fObj || t.objective_id === fObj) && (!fStatus || t.status === fStatus));
       const wlMap = Object.fromEntries((audit.workload || []).map(w => [w.member, w]));
       const memberIds = members.map(m => m.id);
+      const statuses = ['todo', 'in_progress', 'blocked', 'in_review', 'needs_rework', 'done'];
 
       const overloadAlerts = (audit.amber_issues || []).filter(x => x.includes('[OVERLOAD]') || x.includes('[UNASSIGNED]'));
       document.getElementById('workforce-alerts').innerHTML = overloadAlerts.map(a => `<div class="alert alert-amber">${esc(a)}</div>`).join('');
 
-      const statuses = ['todo', 'in_progress', 'blocked', 'in_review', 'needs_rework', 'done'];
       const taskCard = (t) => `
         <div class="task-row">
           <div class="task-top">
-            <span class="task-title">${esc(t.id)} · ${esc(t.title)}</span>
+            <strong style="font-size:12px;">${esc(t.id)} · ${esc(t.title)}</strong>
             <div>
               <span class="tag">${esc(t.objective_id || '無目標')}</span>
               <span class="tag">${esc(t.estimated_hours || 0)}h</span>
               <span class="tag st-${esc(t.status || 'todo')}">${esc(t.status || 'todo')}</span>
-              <span class="tag st-${esc(t.qa_status || 'pending')}">QA:${esc(t.qa_status || 'pending')}</span>
             </div>
           </div>
           <div class="task-controls">
             <span style="font-size:11px;color:var(--muted)">截止: ${esc(t.due_date || '-')}</span>
-            ${t.architecture_module ? `<span class="tag">模組: ${esc(t.architecture_module)}</span>` : ''}
-            <select title="改派負責人" onchange="updateTaskField('${esc(t.id)}', { assignee: this.value })">
+            <select onchange="updateTaskField('${esc(t.id)}', { assignee: this.value })">
               <option value="">未指派</option>
               ${memberIds.map(mid => `<option value="${esc(mid)}" ${t.assignee === mid ? 'selected' : ''}>👤 ${esc(mid)}</option>`).join('')}
             </select>
-            <select title="調整狀態" onchange="updateTaskField('${esc(t.id)}', { status: this.value })">
+            <select onchange="updateTaskField('${esc(t.id)}', { status: this.value })">
               ${statuses.map(st => `<option value="${st}" ${t.status === st ? 'selected' : ''}>${st}</option>`).join('')}
             </select>
           </div>
@@ -435,28 +564,24 @@
           <div class="member-card ${util > 100 ? 'overload' : ''}">
             <div class="member-head">
               <div>
-                <div class="member-name">${esc(m.name || m.id)} <span class="member-role">(${esc(m.role || 'Member')})</span></div>
-                <div style="margin-top:4px;">${(m.skills || []).map(sk => `<span class="tag">${esc(sk)}</span>`).join('')}</div>
+                <div style="font-weight:700;font-size:14px;">${esc(m.name || m.id)}</div>
+                <div style="font-size:11px;color:var(--muted)">${esc(m.role || '')}</div>
               </div>
               <div style="text-align:right;">
-                <div style="font-size:18px;font-weight:700;color:${util > 100 ? 'var(--red)' : (util >= 80 ? 'var(--amber)' : 'var(--green)')}">${util}%</div>
-                <div style="font-size:11px;color:var(--muted)">${wl.open_hours}h / ${wl.weekly_capacity}h</div>
+                <div style="font-size:16px;font-weight:700;color:${util > 100 ? 'var(--red)' : (util >= 80 ? 'var(--amber)' : 'var(--green)')}">${util}%</div>
+                <div style="font-size:10px;color:var(--muted)">${wl.open_hours}h / ${wl.weekly_capacity}h</div>
               </div>
             </div>
             <div class="bar-track"><div class="bar-fill ${fillClass}" style="width:${Math.min(100, util)}%"></div></div>
-            <div>${mTasks.length ? mTasks.map(taskCard).join('') : '<div style="font-size:12px;color:var(--muted);padding:8px 0;">目前篩選條件下無指派任務</div>'}</div>
+            <div>${mTasks.length ? mTasks.map(taskCard).join('') : '<div style="font-size:11px;color:var(--muted);padding:6px 0;">無符合條件之任務</div>'}</div>
           </div>
         `;
       }).join('');
 
       const unassigned = filtered.filter(t => !t.assignee || !memberIds.includes(t.assignee));
       const uCard = document.getElementById('unassigned-card');
-      if (unassigned.length) {
-        uCard.style.display = 'block';
-        document.getElementById('unassigned-list').innerHTML = unassigned.map(taskCard).join('');
-      } else {
-        uCard.style.display = 'none';
-      }
+      uCard.style.display = unassigned.length ? 'block' : 'none';
+      document.getElementById('unassigned-list').innerHTML = unassigned.map(taskCard).join('');
     }
 
     function renderObjectivesAndGantt(objectives, tasks, audit) {
@@ -466,43 +591,16 @@
         const linked = tasks.filter(t => t.objective_id === o.id);
         return `
           <div class="card">
-            <h2>
-              <span>${esc(o.id)} — ${esc(o.title)}</span>
-              <span class="tag">目標期限: ${esc(o.target_date || '-')} · ${oa.verified_done_tasks}/${oa.total_tasks} 已驗收 (${oa.completion_pct}%)</span>
-            </h2>
+            <h2><span>${esc(o.id)} — ${esc(o.title)}</span><span class="tag">${esc(o.target_date || '-')} · ${oa.verified_done_tasks}/${oa.total_tasks} (${oa.completion_pct}%)</span></h2>
             <div class="bar-track"><div class="bar-fill fill-blue" style="width:${oa.completion_pct}%"></div></div>
-            <div style="margin:6px 0 10px;">
-              ${(o.architecture_modules || []).map(mod => `<span class="tag">架構模組: ${esc(mod)}</span>`).join('')}
-            </div>
-            ${linked.length ? `
-              <table>
-                <thead><tr><th>任務 ID</th><th>名稱</th><th>負責人</th><th>截止日</th><th>工時</th><th>依賴</th><th>狀態 / QA</th></tr></thead>
-                <tbody>
-                  ${linked.map(t => `
-                    <tr>
-                      <td><strong>${esc(t.id)}</strong></td>
-                      <td>${esc(t.title)}</td>
-                      <td>${esc(t.assignee || '-')}</td>
-                      <td>${esc(t.due_date || '-')}</td>
-                      <td>${esc(t.estimated_hours || 0)}h</td>
-                      <td>${(t.depends_on || []).join(', ') || '-'}</td>
-                      <td><span class="tag st-${esc(t.status)}">${esc(t.status)}</span><span class="tag st-${esc(t.qa_status)}">QA:${esc(t.qa_status)}</span></td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            ` : '<div class="alert alert-amber">此目標尚未派發任何任務！</div>'}
+            ${linked.length ? `<table><thead><tr><th>ID</th><th>任務</th><th>負責人</th><th>截止</th><th>工時</th><th>狀態</th></tr></thead><tbody>${linked.map(t => `<tr><td><strong>${esc(t.id)}</strong></td><td>${esc(t.title)}</td><td>${esc(t.assignee || '-')}</td><td>${esc(t.due_date || '-')}</td><td>${esc(t.estimated_hours || 0)}h</td><td><span class="tag st-${esc(t.status)}">${esc(t.status)}</span></td></tr>`).join('')}</tbody></table>` : '<div class="alert alert-amber">此目標尚未派發任務</div>'}
           </div>
         `;
       }).join('');
 
-      // Simple timeline Gantt bar
       const todayMs = new Date((audit.as_of || new Date().toISOString().slice(0, 10)) + 'T00:00:00').getTime();
       const dated = tasks.filter(t => t.due_date).map(t => ({ ...t, dueMs: new Date(t.due_date + 'T00:00:00').getTime() }));
-      if (!dated.length) {
-        document.getElementById('gantt-container').innerHTML = '<div style="color:var(--muted);font-size:13px;">尚無具截止日之任務。</div>';
-        return;
-      }
+      if (!dated.length) return;
       const minMs = Math.min(todayMs - 5 * 86400000, ...dated.map(d => d.dueMs - 7 * 86400000));
       const maxMs = Math.max(todayMs + 14 * 86400000, ...dated.map(d => d.dueMs + 3 * 86400000));
       const span = Math.max(86400000, maxMs - minMs);
@@ -512,45 +610,26 @@
         const endPct = Math.min(99, Math.max(4, ((t.dueMs - minMs) / span) * 100));
         const durDays = Math.max(2, Math.ceil((t.estimated_hours || 8) / 6));
         const startPct = Math.max(0, endPct - (durDays * 86400000 / span) * 100);
-        const widthPct = Math.max(3, endPct - startPct);
         const overdue = t.status !== 'done' && t.dueMs < todayMs;
-        const bg = t.status === 'done' ? '#16a34a' : (overdue ? '#dc2626' : (t.status === 'blocked' ? '#b91c1c' : '#0284c7'));
-        return `
-          <div class="gantt-row">
-            <div><strong>${esc(t.id)}</strong> ${esc(t.title)}<div style="color:var(--muted);font-size:11px;">👤 ${esc(t.assignee || '-')} · ${esc(t.objective_id || '-')}</div></div>
-            <div class="gantt-track">
-              <div class="gantt-today" style="left:${todayPct}%"></div>
-              <div class="gantt-bar" style="left:${startPct}%;width:${widthPct}%;background:${bg};">${esc(t.status)}</div>
-            </div>
-            <div style="text-align:right;color:${overdue ? 'var(--red)' : 'var(--muted)'}">${esc(t.due_date)}</div>
-          </div>
-        `;
+        const bg = t.status === 'done' ? '#16a34a' : (overdue ? '#dc2626' : '#0284c7');
+        return `<div class="gantt-row"><div><strong>${esc(t.id)}</strong> ${esc(t.title)}</div><div class="gantt-track"><div class="gantt-today" style="left:${todayPct}%"></div><div class="gantt-bar" style="left:${startPct}%;width:${Math.max(3, endPct - startPct)}%;background:${bg};">${esc(t.status)}</div></div><div style="text-align:right;color:${overdue ? 'var(--red)' : 'var(--muted)'}">${esc(t.due_date)}</div></div>`;
       }).join('');
     }
 
     function renderQA(tasks, audit) {
       const reds = (audit.red_issues || []).map(x => `<div class="alert alert-red">🚨 ${esc(x)}</div>`);
       const ambers = (audit.amber_issues || []).map(x => `<div class="alert alert-amber">⚠️ ${esc(x)}</div>`);
-      document.getElementById('audit-alerts').innerHTML = (reds.length || ambers.length)
-        ? reds.concat(ambers).join('')
-        : '<div class="alert alert-green">✅ 目前所有目標對齊、時程、人力負荷與品質硬閘門全數通過！</div>';
-
-      document.getElementById('qa-table-body').innerHTML = tasks.map(t => {
-        const acs = (t.acceptance_criteria || []).map(c =>
-          `<div>${c.passed ? '✅' : '⬜'} ${esc(c.criterion)}</div>`
-        ).join('') || '<span style="color:var(--muted)">未定義</span>';
-        const evs = (t.evidence || []).map(e => `<div>• ${esc(e)}</div>`).join('') || '<span style="color:var(--muted)">尚無證據</span>';
-        return `
-          <tr>
-            <td><strong>${esc(t.id)}</strong><br/>${esc(t.title)}</td>
-            <td><span class="tag">${esc(t.objective_id || '-')}</span></td>
-            <td>${esc(t.assignee || '-')}</td>
-            <td><span class="tag st-${esc(t.status)}">${esc(t.status)}</span><br/><span class="tag st-${esc(t.qa_status)}">QA:${esc(t.qa_status)}</span></td>
-            <td>${acs}</td>
-            <td>${evs}</td>
-          </tr>
-        `;
-      }).join('');
+      document.getElementById('audit-alerts').innerHTML = (reds.length || ambers.length) ? reds.concat(ambers).join('') : '<div class="alert alert-green">✅ 所有目標對齊、時程、人力負荷與品質硬閘門全數通過！</div>';
+      document.getElementById('qa-table-body').innerHTML = tasks.map(t => `
+        <tr>
+          <td><strong>${esc(t.id)}</strong><br/>${esc(t.title)}</td>
+          <td><span class="tag">${esc(t.objective_id || '-')}</span></td>
+          <td>${esc(t.assignee || '-')}</td>
+          <td><span class="tag st-${esc(t.status)}">${esc(t.status)}</span><br/><span class="tag st-${esc(t.qa_status)}">QA:${esc(t.qa_status)}</span></td>
+          <td>${(t.acceptance_criteria || []).map(c => `<div>${c.passed ? '✅' : '⬜'} ${esc(c.criterion)}</div>`).join('') || '-'}</td>
+          <td>${(t.evidence || []).map(e => `<div>• ${esc(e)}</div>`).join('') || '-'}</td>
+        </tr>
+      `).join('');
     }
 
     function renderDocs(force = false) {
@@ -566,16 +645,10 @@
       const raw = (STATE && STATE.architecture_md) || '';
       const blocks = [...raw.matchAll(/```mermaid\s*([\s\S]*?)```/g)].map(m => m[1].trim());
       const box = document.getElementById('mermaid-container');
-      if (!blocks.length) {
-        box.innerHTML = '';
-        return;
-      }
+      if (!blocks.length) { box.innerHTML = ''; return; }
       box.innerHTML = blocks.map((b, i) => `<div class="mermaid-wrap"><div class="mermaid" id="mmd-${i}">${esc(b)}</div></div>`).join('');
       if (window.mermaid) {
-        try {
-          window.mermaid.initialize({ startOnLoad: false, theme: 'dark' });
-          window.mermaid.run({ nodes: box.querySelectorAll('.mermaid') });
-        } catch (_) {}
+        try { window.mermaid.initialize({ startOnLoad: false, theme: 'dark' }); window.mermaid.run({ nodes: box.querySelectorAll('.mermaid') }); } catch (_) {}
       }
     }
 

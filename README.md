@@ -71,8 +71,12 @@ skillpack update --target ./.agents/skills --skill sprint-operations --incoming 
 # Roll back a skill to its previous backup
 skillpack rollback --target ./.agents/skills --skill sprint-operations
 
-# Launch the live visual PM & workforce allocation frontend dashboard
-skillpack dashboard --hub ./project-hub --port 8765 --init-sample --open
+# Launch an interactive PM Assistant powered by agy, claude, or codex + live visual workforce board
+skillpack launch --pack project-mgmt --agent agy --project-root . --open
+skillpack launch --pack project-mgmt --agent claude --project-root . --open
+skillpack launch --pack project-mgmt --agent codex --project-root . --open
+# Or run interactive CLI in terminal while keeping the visual board live in browser:
+skillpack launch --pack project-mgmt --agent claude --project-root . --terminal --open
 ```
 
 ## Multi-Agent Target Paths (`--agent`)

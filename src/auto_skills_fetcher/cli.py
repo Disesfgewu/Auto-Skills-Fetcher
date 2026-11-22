@@ -1285,12 +1285,106 @@ def _cmd_dashboard(args: argparse.Namespace) -> int:
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    argv = ["--hub", args.hub, "--host", args.host, "--port", str(args.port)]
+    argv = [
+        "--hub", args.hub,
+        "--project-root", args.project_root,
+        "--agent", args.agent,
+        "--host", args.host,
+        "--port", str(args.port),
+    ]
+    if args.codex_model:
+        argv.extend(["--codex-model", args.codex_model])
     if args.open:
         argv.append("--open")
     if args.init_sample:
         argv.append("--init-sample")
     return int(mod.main(argv))
+
+
+def _cmd_launch(args: argparse.Namespace) -> int:
+    """One-command interactive assistant launcher: assemble pack + boot agy/claude/codex + visual UI."""
+    import shutil
+    import subprocess
+    import threading
+    import webbrowser
+
+    project_root = Path(args.project_root).expanduser().resolve()
+    project_root.mkdir(parents=True, exist_ok=True)
+    hub_dir = Path(args.hub) if args.hub else (project_root / "project-hub")
+
+    # 1. Assemble requested skill pack into the project's native skill dirs so the chosen CLI loads them
+    asm_ns = argparse.Namespace(
+        db=args.db,
+        packs_config=args.packs_config,
+        sources_config=args.sources_config,
+        pack=args.pack,
+        target=None,
+        agent="all",
+        scope="project",
+        project_root=str(project_root),
+        fetch=bool(args.fetch),
+        prune=bool(args.prune),
+    )
+    rc = _cmd_assemble(asm_ns)
+    if rc != 0:
+        return rc
+
+    # 2. Load dashboard/assistant module
+    import importlib.util
+
+    packs_cfg_path = Path(args.packs_config).resolve()
+    repo_root = packs_cfg_path.parents[1] if packs_cfg_path.exists() else Path.cwd()
+    script_path = repo_root / "skills" / "project-command-center" / "scripts" / "serve_dashboard.py"
+    spec = importlib.util.spec_from_file_location("serve_dashboard", script_path)
+    assert spec and spec.loader
+    dash_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(dash_mod)
+
+    if args.init_sample or (args.pack == "project-mgmt" and not hub_dir.exists()):
+        dash_mod.init_sample_hub(hub_dir)
+
+    # 3a. Terminal interactive mode: start visual board in background + launch interactive agy/claude/codex TTY
+    if args.terminal:
+        binary = shutil.which(args.agent)
+        if not binary:
+            print(f"Error: '{args.agent}' CLI not found in PATH.", file=sys.stderr)
+            return 1
+        srv = dash_mod.create_server(
+            hub_dir,
+            host=args.host,
+            port=args.port,
+            project_root=project_root,
+            default_agent=args.agent,
+            codex_model=args.codex_model,
+        )
+        actual_port = srv.server_address[1]
+        url = f"http://{args.host}:{actual_port}"
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        print(f"Visual PM Board running at {url} — launching interactive '{args.agent}' session...")
+        if args.open:
+            webbrowser.open(url)
+        try:
+            cmd = [binary]
+            if args.agent == "codex" and args.codex_model:
+                cmd.extend(["-m", args.codex_model])
+            return int(subprocess.call(cmd, cwd=str(project_root)))
+        finally:
+            srv.shutdown()
+            srv.server_close()
+
+    # 3b. Default: Launch Split-Screen Interactive Assistant Web UI powered by agy / claude / codex
+    dash_ns = argparse.Namespace(
+        packs_config=args.packs_config,
+        hub=str(hub_dir),
+        project_root=str(project_root),
+        agent=args.agent,
+        codex_model=args.codex_model,
+        host=args.host,
+        port=args.port,
+        open=bool(args.open),
+        init_sample=False,
+    )
+    return _cmd_dashboard(dash_ns)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1425,9 +1519,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_dash = sub.add_parser(
         "dashboard",
-        help="Launch the live visual PM & workforce allocation web dashboard.",
+        help="Launch the interactive PM Assistant (agy/claude/codex) + live visual workforce dashboard.",
     )
     p_dash.add_argument("--hub", default="./project-hub", help="Path to project-hub directory.")
+    p_dash.add_argument("--project-root", default=".", help="Workspace root where agy/claude/codex runs.")
+    p_dash.add_argument(
+        "--agent",
+        choices=["agy", "claude", "codex"],
+        default="agy",
+        help="Default AI engine powering the interactive assistant (default: agy).",
+    )
+    p_dash.add_argument("--codex-model", help="Optional model override for codex exec.")
     p_dash.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1).")
     p_dash.add_argument("--port", type=int, default=8765, help="Bind port (default: 8765).")
     p_dash.add_argument("--open", action="store_true", help="Open browser automatically on startup.")
@@ -1437,6 +1539,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="Initialize starter project-hub/ files if missing.",
     )
     p_dash.set_defaults(func=_cmd_dashboard)
+
+    p_launch = sub.add_parser(
+        "launch",
+        help="Assemble a skill pack and launch an interactive assistant powered by agy, claude, or codex.",
+    )
+    p_launch.add_argument("--pack", default="project-mgmt", help="Pack to assemble (default: project-mgmt).")
+    p_launch.add_argument(
+        "--agent",
+        choices=["agy", "claude", "codex"],
+        default="agy",
+        help="AI CLI engine to launch (agy, claude, or codex).",
+    )
+    p_launch.add_argument("--project-root", default=".", help="Target project workspace directory.")
+    p_launch.add_argument("--hub", help="Optional custom project-hub path (default: <project-root>/project-hub).")
+    p_launch.add_argument("--codex-model", help="Optional model override for codex.")
+    p_launch.add_argument("--host", default="127.0.0.1")
+    p_launch.add_argument("--port", type=int, default=8765)
+    p_launch.add_argument("--open", action="store_true", help="Open the interactive visual assistant in browser.")
+    p_launch.add_argument(
+        "--terminal",
+        action="store_true",
+        help="Open interactive agy/claude/codex directly in terminal while running visual board in background.",
+    )
+    p_launch.add_argument("--fetch", action="store_true", help="Fetch upstream skills if not yet synced.")
+    p_launch.add_argument("--prune", action="store_true", help="Remove previously managed skills when switching pack.")
+    p_launch.add_argument("--init-sample", action="store_true", help="Initialize starter project-hub/ if missing.")
+    p_launch.set_defaults(func=_cmd_launch)
 
     p_rec = sub.add_parser("recommend", help="Run Champion-Challenger replacement scoring.")
     p_rec.add_argument("--domain", default="all", help="Domain name or 'all'.")
