@@ -1,0 +1,335 @@
+version: 1
+
+packs:
+  base-office:
+    description: Shared foundational document processing skills inherited by domain packs.
+    domain: base
+    update_policy: track-with-diff
+    hysteresis_margin: 10.0
+    skills:
+      - slot: base:pdf-toolkit
+        name: pdf
+        repo: anthropics/skills
+        path: skills/pdf/SKILL.md
+        url: https://github.com/anthropics/skills
+      - slot: base:docx-toolkit
+        name: docx
+        repo: anthropics/skills
+        path: skills/docx/SKILL.md
+        url: https://github.com/anthropics/skills
+      - slot: base:xlsx-toolkit
+        name: xlsx
+        repo: anthropics/skills
+        path: skills/xlsx/SKILL.md
+        url: https://github.com/anthropics/skills
+
+  academic-research:
+    description: 全流程學術研究助手：涵蓋研究規劃與進度追蹤、論文爬取與文獻回顧、實驗設計與基準測試、統計分析與視覺化、學術倫理與抄襲檢查、同儕審查與論文撰寫。
+    domain: academic
+    extends:
+      - base-office
+    update_policy: pinned
+    hysteresis_margin: 12.0
+    auto_expand:
+      enabled: true
+      min_score: 78.0
+      max_skills: 30
+      max_add_per_run: 3
+      allow_replace: false
+    skills:
+      # 1. 研究規劃、題目評估與進度追蹤
+      - slot: academic:research-progress
+        name: vibe-research-workflow
+        repo: HKUSTDial/Supervisor-Skills
+        path: skills/vibe-research-workflow/SKILL.md
+        url: https://github.com/HKUSTDial/Supervisor-Skills/blob/main/skills/vibe-research-workflow/SKILL.md
+      - slot: academic:idea-evaluation
+        name: idea-evaluator
+        repo: HKUSTDial/Supervisor-Skills
+        path: skills/idea-evaluator/SKILL.md
+        url: https://github.com/HKUSTDial/Supervisor-Skills/blob/main/skills/idea-evaluator/SKILL.md
+      - slot: academic:hypothesis-generation
+        name: hypothesis-generation
+        repo: K-Dense-AI/claude-scientific-skills
+        path: skills/hypothesis-generation/SKILL.md
+        url: https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/skills/hypothesis-generation/SKILL.md
+      # 2. 學術論文爬取、檢索、文獻回顧與引文管理
+      - slot: academic:paper-crawler
+        name: paper-download
+        repo: tsingyuai/scientify
+        path: skills/paper-download/SKILL.md
+        url: https://github.com/tsingyuai/scientify/blob/main/skills/paper-download/SKILL.md
+      - slot: academic:paper-lookup
+        name: paper-lookup
+        repo: K-Dense-AI/claude-scientific-skills
+        path: skills/paper-lookup/SKILL.md
+        url: https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/skills/paper-lookup/SKILL.md
+      - slot: academic:literature-review
+        name: literature-review
+        repo: K-Dense-AI/claude-scientific-skills
+        path: skills/literature-review/SKILL.md
+        url: https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/skills/literature-review/SKILL.md
+      - slot: academic:citation-management
+        name: citation-management
+        repo: K-Dense-AI/claude-scientific-skills
+        path: skills/citation-management/SKILL.md
+        url: https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/skills/citation-management/SKILL.md
+      # 3. 實驗設計、跑基準測試、實驗追蹤與統計視覺化
+      - slot: academic:experimental-design
+        name: experimental-design
+        repo: K-Dense-AI/claude-scientific-skills
+        path: skills/experimental-design/SKILL.md
+        url: https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/skills/experimental-design/SKILL.md
+      - slot: academic:baseline-runner
+        name: baseline-runner
+        repo: tsingyuai/scientify
+        path: skills/baseline-runner/SKILL.md
+        url: https://github.com/tsingyuai/scientify/blob/main/skills/baseline-runner/SKILL.md
+      - slot: academic:experiment-tracker
+        name: ml-experiment-tracker
+        repo: wentorai/research-plugins
+        path: skills/analysis/statistics/ml-experiment-tracker/SKILL.md
+        url: https://github.com/wentorai/research-plugins/blob/main/skills/analysis/statistics/ml-experiment-tracker/SKILL.md
+      - slot: academic:statistical-analysis
+        name: statistical-analysis
+        repo: K-Dense-AI/claude-scientific-skills
+        path: skills/statistical-analysis/SKILL.md
+        url: https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/skills/statistical-analysis/SKILL.md
+      - slot: academic:scientific-visualization
+        name: scientific-visualization
+        repo: K-Dense-AI/claude-scientific-skills
+        path: skills/scientific-visualization/SKILL.md
+        url: https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/skills/scientific-visualization/SKILL.md
+      # 4. 學術倫理、原創性/抄襲檢查、可重現性審查與同儕審稿
+      - slot: academic:academic-ethics
+        name: plagiarism-detection-guide
+        repo: wentorai/research-plugins
+        path: skills/writing/polish/plagiarism-detection-guide/SKILL.md
+        url: https://github.com/wentorai/research-plugins/blob/main/skills/writing/polish/plagiarism-detection-guide/SKILL.md
+      - slot: academic:scraping-ethics
+        name: web-scraping-ethics-guide
+        repo: wentorai/research-plugins
+        path: skills/tools/scraping/web-scraping-ethics-guide/SKILL.md
+        url: https://github.com/wentorai/research-plugins/blob/main/skills/tools/scraping/web-scraping-ethics-guide/SKILL.md
+      - slot: academic:scientific-integrity
+        name: scientific-critical-thinking
+        repo: K-Dense-AI/claude-scientific-skills
+        path: skills/scientific-critical-thinking/SKILL.md
+        url: https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/skills/scientific-critical-thinking/SKILL.md
+      - slot: academic:peer-review
+        name: peer-review
+        repo: K-Dense-AI/claude-scientific-skills
+        path: skills/peer-review/SKILL.md
+        url: https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/skills/peer-review/SKILL.md
+      - slot: academic:rebuttal-guidance
+        name: rebuttal-guidance
+        repo: HKUSTDial/Supervisor-Skills
+        path: others/rebuttal-guidance/SKILL.md
+        url: https://github.com/HKUSTDial/Supervisor-Skills/blob/main/others/rebuttal-guidance/SKILL.md
+      # 5. 論文撰寫
+      - slot: academic:academic-paper
+        name: academic-paper
+        repo: Imbad0202/academic-research-skills
+        path: academic-paper/SKILL.md
+        url: https://github.com/Imbad0202/academic-research-skills/blob/main/academic-paper/SKILL.md
+
+  project-mgmt:
+    description: 全流程專案管理與指揮中心助手：涵蓋完整架構圖與計劃書追蹤、目標↔任務群組映射、時程與依賴檢核、人力產能配置、產出品質硬閘門（QA/DoD）、風險預演與方向校正。
+    domain: project_mgmt
+    extends:
+      - base-office
+    update_policy: track-with-diff
+    hysteresis_margin: 8.0
+    auto_expand:
+      enabled: true
+      min_score: 75.0
+      max_skills: 30
+      max_add_per_run: 3
+      allow_replace: false
+    skills:
+      # 1. 核心專案管理指揮中心（內建：架構圖+計劃書+目標任務映射+時間點+人力負荷+品質硬閘門+自動稽核腳本）
+      - slot: pm:command-center
+        name: project-command-center
+        repo: Disesfgewu/Auto-Skills-Fetcher
+        path: skills/project-command-center/SKILL.md
+        local_path: skills/project-command-center/SKILL.md
+        url: https://github.com/Disesfgewu/Auto-Skills-Fetcher/blob/main/skills/project-command-center/SKILL.md
+      # 2. 架構圖、計劃書/PRD、規格對齊與計畫壓力測試
+      - slot: pm:system-architecture
+        name: senior-architect
+        repo: alirezarezvani/claude-skills
+        path: engineering-team/skills/senior-architect/SKILL.md
+        url: https://github.com/alirezarezvani/claude-skills/blob/main/engineering-team/skills/senior-architect/SKILL.md
+      - slot: pm:project-charter-prd
+        name: prd
+        repo: alirezarezvani/claude-skills
+        path: .gemini/skills/prd/SKILL.md
+        url: https://github.com/alirezarezvani/claude-skills/blob/main/.gemini/skills/prd/SKILL.md
+      - slot: pm:plan-grilling
+        name: plan-grilling
+        repo: borghei/Claude-Skills
+        path: project-management/discovery/plan-grilling/SKILL.md
+        url: https://github.com/borghei/Claude-Skills/blob/main/project-management/discovery/plan-grilling/SKILL.md
+      - slot: pm:pre-mortem
+        name: pre-mortem
+        repo: borghei/Claude-Skills
+        path: project-management/discovery/pre-mortem/SKILL.md
+        url: https://github.com/borghei/Claude-Skills/blob/main/project-management/discovery/pre-mortem/SKILL.md
+      # 3. 目標↔任務群組、OKR、路線圖、時程與專案健康度追蹤
+      - slot: pm:okr-alignment
+        name: okr
+        repo: alirezarezvani/claude-skills
+        path: .gemini/skills/okr/SKILL.md
+        url: https://github.com/alirezarezvani/claude-skills/blob/main/.gemini/skills/okr/SKILL.md
+      - slot: pm:project-health
+        name: project-health
+        repo: alirezarezvani/claude-skills
+        path: .gemini/skills/project-health/SKILL.md
+        url: https://github.com/alirezarezvani/claude-skills/blob/main/.gemini/skills/project-health/SKILL.md
+      - slot: pm:senior-program-pm
+        name: senior-pm
+        repo: alirezarezvani/claude-skills
+        path: project-management/skills/senior-pm/SKILL.md
+        url: https://github.com/alirezarezvani/claude-skills/blob/main/project-management/skills/senior-pm/SKILL.md
+      - slot: pm:roadmap-planning
+        name: roadmap-planning
+        repo: rampstackco/claude-skills
+        path: skills/roadmap-planning/SKILL.md
+        url: https://github.com/rampstackco/claude-skills/blob/main/skills/roadmap-planning/SKILL.md
+      - slot: pm:sprint-operations
+        name: sprint-operations
+        repo: rampstackco/claude-skills
+        path: skills/sprint-operations/SKILL.md
+        url: https://github.com/rampstackco/claude-skills/blob/main/skills/sprint-operations/SKILL.md
+      - slot: pm:sprint-plan-tracker
+        name: sprint-plan
+        repo: Donchitos/Claude-Code-Game-Studios
+        path: .claude/skills/sprint-plan/SKILL.md
+        url: https://github.com/Donchitos/Claude-Code-Game-Studios/blob/main/.claude/skills/sprint-plan/SKILL.md
+      - slot: pm:backlog-triage
+        name: backlog-triage
+        repo: rampstackco/claude-skills
+        path: skills/backlog-triage/SKILL.md
+        url: https://github.com/rampstackco/claude-skills/blob/main/skills/backlog-triage/SKILL.md
+      - slot: pm:dependency-management
+        name: dependency-management
+        repo: rampstackco/claude-skills
+        path: skills/dependency-management/SKILL.md
+        url: https://github.com/rampstackco/claude-skills/blob/main/skills/dependency-management/SKILL.md
+      # 4. 人力產能、變革管理與多受眾匯報
+      - slot: pm:capacity-planner
+        name: capacity-planner
+        repo: borghei/Claude-Skills
+        path: business-operations/capacity-planner/SKILL.md
+        url: https://github.com/borghei/Claude-Skills/blob/main/business-operations/capacity-planner/SKILL.md
+      - slot: pm:change-management
+        name: change-management
+        repo: borghei/Claude-Skills
+        path: c-level-advisor/change-management/SKILL.md
+        url: https://github.com/borghei/Claude-Skills/blob/main/c-level-advisor/change-management/SKILL.md
+      - slot: pm:roadmap-communication
+        name: roadmap-communication
+        repo: borghei/Claude-Skills
+        path: project-management/execution/roadmap-communication/SKILL.md
+        url: https://github.com/borghei/Claude-Skills/blob/main/project-management/execution/roadmap-communication/SKILL.md
+      - slot: pm:project-manager-suite
+        name: cs-project-manager
+        repo: alirezarezvani/claude-skills
+        path: .gemini/skills/cs-project-manager/SKILL.md
+        url: https://github.com/alirezarezvani/claude-skills/blob/main/.gemini/skills/cs-project-manager/SKILL.md
+      - slot: pm:agile-product-owner
+        name: cs-agile-product-owner
+        repo: alirezarezvani/claude-skills
+        path: .gemini/skills/cs-agile-product-owner/SKILL.md
+        url: https://github.com/alirezarezvani/claude-skills/blob/main/.gemini/skills/cs-agile-product-owner/SKILL.md
+      # 5. 產出品質硬閘門（規格驗收、交付管理與事後檢討）
+      - slot: pm:spec-quality-gate
+        name: spec-driven-workflow
+        repo: alirezarezvani/claude-skills
+        path: engineering/skills/spec-driven-workflow/SKILL.md
+        url: https://github.com/alirezarezvani/claude-skills/blob/main/engineering/skills/spec-driven-workflow/SKILL.md
+      - slot: pm:delivery-manager
+        name: delivery-manager
+        repo: borghei/Claude-Skills
+        path: project-management/delivery-manager/SKILL.md
+        url: https://github.com/borghei/Claude-Skills/blob/main/project-management/delivery-manager/SKILL.md
+      - slot: pm:after-action-report
+        name: after-action-report
+        repo: rampstackco/claude-skills
+        path: skills/after-action-report/SKILL.md
+        url: https://github.com/rampstackco/claude-skills/blob/main/skills/after-action-report/SKILL.md
+
+  exec-secretary-deck:
+    description: 全方位個人秘書與簡報生成助手：涵蓋投影片與董事會簡報設計、視覺主題與品牌規範、圖表與流程圖繪製、文件共筆、行事曆排程、會議紀要、幕僚長協調與內部溝通。
+    domain: secretary_deck
+    extends:
+      - base-office
+    update_policy: side-by-side
+    hysteresis_margin: 6.0
+    auto_expand:
+      enabled: true
+      min_score: 75.0
+      max_skills: 25
+      max_add_per_run: 3
+      allow_replace: false
+    skills:
+      - slot: secretary:pptx-builder
+        name: pptx
+        repo: anthropics/skills
+        path: skills/pptx/SKILL.md
+        url: https://github.com/anthropics/skills
+      - slot: secretary:theme-factory
+        name: theme-factory
+        repo: anthropics/skills
+        path: skills/theme-factory/SKILL.md
+        url: https://github.com/anthropics/skills
+      - slot: secretary:internal-comms
+        name: internal-comms
+        repo: anthropics/skills
+        path: skills/internal-comms/SKILL.md
+        url: https://github.com/anthropics/skills
+      - slot: secretary:meeting-notes
+        name: meeting-notes
+        repo: claude-office-skills/skills
+        path: meeting-notes/SKILL.md
+        url: https://github.com/claude-office-skills/skills
+      - slot: secretary:doc-coauthoring
+        name: doc-coauthoring
+        repo: anthropics/skills
+        path: skills/doc-coauthoring/SKILL.md
+        url: https://github.com/anthropics/skills/blob/main/skills/doc-coauthoring/SKILL.md
+      - slot: secretary:brand-guidelines
+        name: brand-guidelines
+        repo: anthropics/skills
+        path: skills/brand-guidelines/SKILL.md
+        url: https://github.com/anthropics/skills/blob/main/skills/brand-guidelines/SKILL.md
+      - slot: secretary:board-deck-builder
+        name: board-deck-builder
+        repo: borghei/Claude-Skills
+        path: c-level-advisor/board-deck-builder/SKILL.md
+        url: https://github.com/borghei/Claude-Skills/blob/main/c-level-advisor/board-deck-builder/SKILL.md
+      - slot: secretary:board-meeting
+        name: board-meeting
+        repo: borghei/Claude-Skills
+        path: c-level-advisor/board-meeting/SKILL.md
+        url: https://github.com/borghei/Claude-Skills/blob/main/c-level-advisor/board-meeting/SKILL.md
+      - slot: secretary:chief-of-staff
+        name: chief-of-staff
+        repo: borghei/Claude-Skills
+        path: c-level-advisor/chief-of-staff/SKILL.md
+        url: https://github.com/borghei/Claude-Skills/blob/main/c-level-advisor/chief-of-staff/SKILL.md
+      - slot: secretary:calendar-automation
+        name: calendar-automation
+        repo: claude-office-skills/skills
+        path: calendar-automation/SKILL.md
+        url: https://github.com/claude-office-skills/skills/blob/main/calendar-automation/SKILL.md
+      - slot: secretary:chart-designer
+        name: chart-designer
+        repo: claude-office-skills/skills
+        path: chart-designer/SKILL.md
+        url: https://github.com/claude-office-skills/skills/blob/main/chart-designer/SKILL.md
+      - slot: secretary:diagram-creator
+        name: diagram-creator
+        repo: claude-office-skills/skills
+        path: diagram-creator/SKILL.md
+        url: https://github.com/claude-office-skills/skills/blob/main/diagram-creator/SKILL.md
